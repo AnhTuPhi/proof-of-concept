@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chunked Upload / Download POC</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #1e1e1e; color: #e6e6e6;
+               margin: 0; padding: 24px; max-width: 1100px; margin-inline: auto; }
+        h1 { font-size: 20px; margin-top: 0; }
+        h2 { font-size: 14px; margin: 0 0 12px 0; color: #9ec5fe; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card { background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        label { font-size: 12px; color: #aaa; display: inline-flex; flex-direction: column; gap: 4px; }
+        input, select, button { font-family: inherit; font-size: 13px; padding: 6px 10px;
+                                border-radius: 4px; border: 1px solid #444; background: #1a1a1a; color: #eee; }
+        button { background: #2563eb; border-color: #2563eb; cursor: pointer; padding: 8px 16px; font-weight: 500; }
+        button:hover:not(:disabled) { background: #1d4ed8; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.secondary { background: #374151; border-color: #4b5563; }
+        button.secondary:hover { background: #4b5563; }
+        .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+        .mode-toggle { display: flex; gap: 20px; padding: 10px 14px; background: #1a1a1a;
+                       border-radius: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+        .mode-toggle label { flex-direction: row; align-items: center; gap: 8px; color: #e6e6e6;
+                             font-size: 13px; cursor: pointer; }
+        .mode-toggle input[type=radio] { margin: 0; }
+        .mode-tag { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 3px;
+                    margin-left: 6px; vertical-align: middle; color: #fff; }
+        .mode-tag.local { background: #1d4ed8; }
+        .mode-tag.s3 { background: #be185d; }
+        .progress-bar { height: 28px; background: #1a1a1a; border-radius: 4px; overflow: hidden;
+                        position: relative; margin: 12px 0 8px; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #9333ea); transition: width 0.3s; }
+        .progress-fill.s3 { background: linear-gradient(90deg, #be185d, #f59e0b); }
+        .progress-text { position: absolute; inset: 0; display: flex; align-items: center;
+                         justify-content: center; font-size: 12px; font-weight: 600; }
+        .chunks { display: grid; grid-template-columns: repeat(auto-fill, minmax(16px, 1fr));
+                  gap: 2px; margin: 8px 0; max-height: 120px; overflow-y: auto; }
+        .chunk { aspect-ratio: 1; background: #333; border-radius: 2px; min-height: 14px; }
+        .chunk.uploading { background: #fbbf24; animation: pulse 1s infinite; }
+        .chunk.done { background: #10b981; }
+        .chunk.failed { background: #ef4444; }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+        .stat { background: #1a1a1a; padding: 8px 12px; border-radius: 4px; }
+        .stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+        .file-item { background: #1a1a1a; padding: 12px; border-radius: 4px; margin: 6px 0;
+                     display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .file-meta { font-size: 11px; color: #888; margin-top: 2px; }
+        .log { background: #0a0a0a; color: #9ca3af; font-family: 'Consolas', 'Courier New', monospace;
+               font-size: 11px; padding: 12px; border-radius: 4px; max-height: 240px; overflow-y: auto; line-height: 1.5; }
+        .log .ok { color: #10b981; }
+        .log .err { color: #ef4444; }
+        .log .warn { color: #fbbf24; }
+        code { background: #111; padding: 1px 4px; border-radius: 2px; font-size: 11px; }
+        .hint { font-size: 12px; color: #888; margin-top: 8px; line-height: 1.5; }
+        .hint code { color: #fbbf24; }
+    </style>
+</head>
+<body>
+
+<h1>Chunked Upload / Download POC</h1>
+
+<div class="card">
+    <h2>Upload</h2>
+
+    <div class="mode-toggle">
+        <label><input type="radio" name="mode" value="local" checked>
+            Local server <span class="mode-tag local">via Spring → disk</span></label>
+        <label><input type="radio" name="mode" value="s3">
+            S3 / MinIO direct <span class="mode-tag s3">browser → MinIO (bypasses Spring)</span></label>
+    </div>
+
+    <div class="row">
+        <label>File<input type="file" id="fileInput"></label>
+        <label>Chunk size
+            <select id="chunkSize">
+                <option value="1048576">1 MB (local only)</option>
+                <option value="4194304">4 MB (local only)</option>
+                <option value="8388608" selected>8 MB</option>
+                <option value="16777216">16 MB</option>
+                <option value="33554432">32 MB</option>
+            </select>
+        </label>
+        <label>Parallel
+            <select id="concurrency">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="4">4</option>
+                <option value="6" selected>6</option>
+                <option value="8">8</option>
+                <option value="12">12</option>
+            </select>
+        </label>
+        <button id="uploadBtn">Start Upload</button>
+    </div>
+
+    <div class="hint">
+        Open DevTools → Network and watch the difference:
+        in <b>local</b> mode every chunk hits <code>localhost:8080</code>;
+        in <b>S3</b> mode chunks PUT directly to <code>localhost:9000</code> (MinIO) — Spring only mints URLs.
+    </div>
+
+    <div id="uploadArea" style="display: none; margin-top: 16px;">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progFill" style="width:0%"></div>
+            <div class="progress-text" id="progText">0%</div>
+        </div>
+        <div class="chunks" id="chunkGrid"></div>
+        <div class="stats">
+            <div class="stat"><div class="stat-label">Speed</div><div class="stat-value" id="speed">—</div></div>
+            <div class="stat"><div class="stat-label">Chunks</div><div class="stat-value" id="doneCount">0 / 0</div></div>
+            <div class="stat"><div class="stat-label">Retries</div><div class="stat-value" id="retries">0</div></div>
+            <div class="stat"><div class="stat-label">ETA</div><div class="stat-value" id="eta">—</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Files <span id="filesModeBadge"></span></h2>
+    <div id="fileList"><i style="color:#888">Loading…</i></div>
+    <div style="margin-top: 8px;"><button class="secondary" onclick="refreshFiles()">Refresh</button></div>
+</div>
+
+<div class="card">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+
+    function log(msg, level) {
+        const el = $('log');
+        const cls = level ? ` class="${level}"` : '';
+        el.innerHTML = `<span${cls}>[${new Date().toLocaleTimeString()}] ${msg}</span><br>` + el.innerHTML;
+    }
+
+    function fmtBytes(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1024 ** 2) return (n / 1024).toFixed(1) + ' KB';
+        if (n < 1024 ** 3) return (n / 1024 ** 2).toFixed(1) + ' MB';
+        return (n / 1024 ** 3).toFixed(2) + ' GB';
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function getMode() {
+        return document.querySelector('input[name=mode]:checked').value;
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function updateModeBadge() {
+        const mode = getMode();
+        $('filesModeBadge').innerHTML = mode === 's3'
+            ? '<span class="mode-tag s3">MinIO bucket</span>'
+            : '<span class="mode-tag local">Server disk</span>';
+        $('progFill').className = 'progress-fill' + (mode === 's3' ? ' s3' : '');
+    }
+
+    // ─── Shared UI state ─────────────────────────────────────
+    let uploadInProgress = false;
+    let uploadStartTime = 0;
+    let uploadedBytes = 0;
+    let totalUploadSize = 0;
+    let totalChunksGlobal = 0;
+    let doneCount = 0;
+    let retryCount = 0;
+
+    function resetUploadUI(totalChunks, totalSize) {
+        totalChunksGlobal = totalChunks;
+        totalUploadSize = totalSize;
+        uploadedBytes = 0;
+        doneCount = 0;
+        retryCount = 0;
+        uploadStartTime = Date.now();
+        $('uploadArea').style.display = 'block';
+        $('chunkGrid').innerHTML = '';
+        for (let i = 0; i < totalChunks; i++) {
+            const d = document.createElement('div');
+            d.className = 'chunk';
+            d.id = 'chunk-' + i;
+            $('chunkGrid').appendChild(d);
+        }
+        $('doneCount').textContent = `0 / ${totalChunks}`;
+        $('retries').textContent = '0';
+        $('speed').textContent = '—';
+        $('eta').textContent = '—';
+        $('progFill').style.width = '0%';
+        $('progText').textContent = '0%';
+    }
+
+    function updateStats() {
+        const elapsed = (Date.now() - uploadStartTime) / 1000;
+        const pct = totalChunksGlobal === 0 ? 0 : (doneCount / totalChunksGlobal) * 100;
+        $('progFill').style.width = pct + '%';
+        $('progText').textContent = pct.toFixed(1) + '%';
+        $('doneCount').textContent = `${doneCount} / ${totalChunksGlobal}`;
+        $('retries').textContent = retryCount;
+        const speed = elapsed > 0 ? uploadedBytes / elapsed : 0;
+        $('speed').textContent = fmtBytes(speed) + '/s';
+        const remaining = totalUploadSize - uploadedBytes;
+        $('eta').textContent = speed > 1024 ? Math.ceil(remaining / speed) + 's' : '—';
+    }
+
+    // ─── Upload dispatcher ───────────────────────────────────
+    async function uploadFile() {
+        const file = $('fileInput').files[0];
+        if (!file) { alert('Pick a file first'); return; }
+        const chunkSize = +$('chunkSize').value;
+        const concurrency = +$('concurrency').value;
+        const mode = getMode();
+
+        if (mode === 's3' && chunkSize < 5 * 1024 * 1024) {
+            alert('S3 multipart minimum is 5 MB per part. Pick 8 MB or larger.');
+            return;
+        }
+
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        $('uploadBtn').disabled = true;
+        resetUploadUI(totalChunks, file.size);
+        log(`[${mode.toUpperCase()}] Upload <b>${escapeHtml(file.name)}</b> (${fmtBytes(file.size)}) — ${totalChunks} chunks @ ${fmtBytes(chunkSize)}, ${concurrency} parallel`);
+
+        try {
+            if (mode === 's3') {
+                await uploadFileS3(file, chunkSize, concurrency);
+            } else {
+                await uploadFileLocal(file, chunkSize, concurrency);
+            }
+            const elapsed = (Date.now() - uploadStartTime) / 1000;
+            log(`✓ Upload done in ${elapsed.toFixed(1)}s (avg ${fmtBytes(file.size / elapsed)}/s)`, 'ok');
+            refreshFiles();
+        } catch (e) {
+            log(`Upload failed: ${e.message}`, 'err');
+        } finally {
+            $('uploadBtn').disabled = false;
+        }
+    }
+
+    // ─── Local mode upload ───────────────────────────────────
+    async function uploadFileLocal(file, chunkSize, concurrency) {
+        const initRes = await fetch('/api/uploads/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: file.name,
+                contentType: file.type || 'application/octet-stream',
+                totalSize: file.size,
+                chunkSize
+            })
+        });
+        if (!initRes.ok) throw new Error('init failed: HTTP ' + initRes.status);
+        const { uploadId, totalChunks } = await initRes.json();
+        log(`uploadId = <code>${uploadId}</code>`);
+
+        const queue = Array.from({ length: totalChunks }, (_, i) => i);
+
+        async function uploadChunk(index, attempt = 0) {
+            const start = index * chunkSize;
+            const blob = file.slice(start, Math.min(start + chunkSize, file.size));
+            $('chunk-' + index).className = 'chunk uploading';
+            try {
+                const res = await fetch(`/api/uploads/${uploadId}/chunks/${index}`, {
+                    method: 'PUT',
+                    body: blob,
+                    headers: { 'Content-Type': 'application/octet-stream' }
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                $('chunk-' + index).className = 'chunk done';
+                uploadedBytes += blob.size;
+                doneCount++;
+                updateStats();
+            } catch (e) {
+                if (attempt >= 5) {
+                    $('chunk-' + index).className = 'chunk failed';
+                    throw e;
+                }
+                retryCount++;
+                updateStats();
+                log(`Chunk ${index} failed (${e.message}), retry ${attempt + 1}`, 'warn');
+                await sleep(250 * 2 ** attempt + Math.random() * 100);
+                return uploadChunk(index, attempt + 1);
+            }
+        }
+
+        async function worker() {
+            while (queue.length) {
+                const i = queue.shift();
+                if (i === undefined) break;
+                await uploadChunk(i);
+            }
+        }
+
+        await Promise.all(Array.from({ length: concurrency }, worker));
+        log('All chunks uploaded, finalizing on server…');
+        const completeRes = await fetch(`/api/uploads/${uploadId}/complete`, { method: 'POST' });
+        if (!completeRes.ok) throw new Error('complete failed: HTTP ' + completeRes.status);
+        const result = await completeRes.json();
+        log(`Server stored as fileId=<code>${result.fileId}</code>, sha256=<code>${result.sha256.slice(0, 16)}…</code>`);
+    }
+
+    // ─── S3 / MinIO direct upload ────────────────────────────
+    async function uploadFileS3(file, chunkSize, concurrency) {
+        const initRes = await fetch('/api/s3/uploads/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: file.name,
+                contentType: file.type || 'application/octet-stream',
+                totalSize: file.size,
+                chunkSize
+            })
+        });
+        if (!initRes.ok) throw new Error('S3 init failed: HTTP ' + initRes.status + ' — is MinIO running?');
+        const { uploadId, key, partCount } = await initRes.json();
+        log(`S3 multipart uploadId=<code>${uploadId.slice(0, 20)}…</code>, key=<code>${escapeHtml(key)}</code>`);
+
+        const signRes = await fetch('/api/s3/uploads/sign-parts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploadId, key, partCount })
+        });
+        if (!signRes.ok) throw new Error('sign-parts failed: HTTP ' + signRes.status);
+        const partUrls = await signRes.json();
+        log(`Got ${partUrls.length} pre-signed PUT URLs — uploading direct to MinIO…`);
+
+        const parts = new Array(partCount);
+        const queue = Array.from({ length: partCount }, (_, i) => i);
+
+        async function uploadPart(index, attempt = 0) {
+            const start = index * chunkSize;
+            const blob = file.slice(start, Math.min(start + chunkSize, file.size));
+            $('chunk-' + index).className = 'chunk uploading';
+            try {
+                const res = await fetch(partUrls[index], { method: 'PUT', body: blob });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                let etag = res.headers.get('ETag');
+                if (!etag) throw new Error('ETag missing — CORS expose-headers misconfigured?');
+                etag = etag.replace(/"/g, '');
+                parts[index] = { partNumber: index + 1, etag };
+                $('chunk-' + index).className = 'chunk done';
+                uploadedBytes += blob.size;
+                doneCount++;
+                updateStats();
+            } catch (e) {
+                if (attempt >= 5) {
+                    $('chunk-' + index).className = 'chunk failed';
+                    throw e;
+                }
+                retryCount++;
+                updateStats();
+                log(`S3 part ${index + 1} failed (${e.message}), retry ${attempt + 1}`, 'warn');
+                await sleep(250 * 2 ** attempt + Math.random() * 100);
+                return uploadPart(index, attempt + 1);
+            }
+        }
+
+        async function worker() {
+            while (queue.length) {
+                const i = queue.shift();
+                if (i === undefined) break;
+                await uploadPart(i);
+            }
+        }
+
+        await Promise.all(Array.from({ length: concurrency }, worker));
+        log('All parts uploaded — calling CompleteMultipartUpload…');
+        const completeRes = await fetch('/api/s3/uploads/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploadId, key, parts })
+        });
+        if (!completeRes.ok) throw new Error('S3 complete failed: HTTP ' + completeRes.status);
+        const result = await completeRes.json();
+        log(`MinIO stored at key=<code>${escapeHtml(result.key)}</code>, etag=<code>${result.etag}</code>`);
+    }
+
+    // ─── Files list dispatcher ───────────────────────────────
+    async function refreshFiles() {
+        const mode = getMode();
+        try {
+            if (mode === 's3') {
+                await listS3Files();
+            } else {
+                await listLocalFiles();
+            }
+        } catch (e) {
+            $('fileList').innerHTML = `<i style="color:#ef4444">Failed to load: ${escapeHtml(e.message)}</i>`;
+        }
+    }
+
+    async function listLocalFiles() {
+        const res = await fetch('/api/files');
+        const files = await res.json();
+        const list = $('fileList');
+        if (!files.length) {
+            list.innerHTML = '<i style="color:#888">No files yet — upload something.</i>';
+            return;
+        }
+        list.innerHTML = '';
+        for (const f of files) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <div>
+                    <div><b>${escapeHtml(f.filename)}</b></div>
+                    <div class="file-meta">${fmtBytes(f.size)} · sha256: <code>${f.sha256.slice(0, 24)}…</code></div>
+                </div>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Parallel Download';
+            btn.onclick = () => downloadLocal(f.fileId, f.filename, f.size);
+            item.appendChild(btn);
+            list.appendChild(item);
+        }
+    }
+
+    async function listS3Files() {
+        const res = await fetch('/api/s3/files');
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' — is MinIO running?');
+        const files = await res.json();
+        const list = $('fileList');
+        if (!files.length) {
+            list.innerHTML = '<i style="color:#888">No files in MinIO bucket yet.</i>';
+            return;
+        }
+        list.innerHTML = '';
+        for (const f of files) {
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            item.innerHTML = `
+                <div>
+                    <div><b>${escapeHtml(f.filename)}</b></div>
+                    <div class="file-meta">${fmtBytes(f.size)} · key: <code>${escapeHtml(f.key)}</code></div>
+                </div>`;
+            const btn = document.createElement('button');
+            btn.textContent = 'Parallel Download';
+            btn.onclick = () => downloadS3(f.key, f.filename);
+            item.appendChild(btn);
+            list.appendChild(item);
+        }
+    }
+
+    // ─── Download (local) ────────────────────────────────────
+    async function downloadLocal(fileId, filename, expectedSize) {
+        const concurrency = 6;
+        const CHUNK = 4 * 1024 * 1024;
+        log(`[LOCAL] Download <b>${escapeHtml(filename)}</b> (${fmtBytes(expectedSize)}) — ${concurrency} parallel ranges`);
+
+        const head = await fetch(`/api/files/${fileId}`, { method: 'HEAD' });
+        const total = +head.headers.get('Content-Length');
+        if (head.headers.get('Accept-Ranges') !== 'bytes') { alert('Server does not support range requests'); return; }
+
+        await parallelRangeDownload(`/api/files/${fileId}`, null, total, CHUNK, concurrency, filename,
+            head.headers.get('Content-Type') || 'application/octet-stream');
+    }
+
+    // ─── Download (S3 via pre-signed URL) ────────────────────
+    async function downloadS3(key, filename) {
+        log(`[S3] Download <code>${escapeHtml(key)}</code> via pre-signed URL`);
+        const r = await fetch('/api/s3/files/signed-get?key=' + encodeURIComponent(key));
+        if (!r.ok) throw new Error('signed-get failed: HTTP ' + r.status);
+        const { url } = await r.json();
+        log(`Got pre-signed GET URL (valid 1h) — browser → MinIO direct`);
+
+        const head = await fetch(url, { method: 'HEAD' });
+        const total = +head.headers.get('Content-Length');
+        if (head.headers.get('Accept-Ranges') !== 'bytes') { alert('MinIO did not advertise byte-range support'); return; }
+
+        await parallelRangeDownload(url, null, total, 4 * 1024 * 1024, 6, filename,
+            head.headers.get('Content-Type') || 'application/octet-stream');
+    }
+
+    async function parallelRangeDownload(url, headers, total, chunkSize, concurrency, filename, contentType) {
+        const ranges = [];
+        for (let s = 0; s < total; s += chunkSize) ranges.push([s, Math.min(s + chunkSize - 1, total - 1)]);
+        const parts = new Array(ranges.length);
+        const queue = ranges.map((r, i) => ({ i, r }));
+        let done = 0;
+        const startTime = Date.now();
+
+        async function worker() {
+            while (queue.length) {
+                const job = queue.shift();
+                if (!job) break;
+                const [s, e] = job.r;
+                const res = await fetch(url, { headers: { Range: `bytes=${s}-${e}` } });
+                if (res.status !== 206) throw new Error('expected 206, got ' + res.status);
+                parts[job.i] = await res.blob();
+                done++;
+                if (done % Math.max(1, Math.floor(ranges.length / 10)) === 0) {
+                    log(`Range progress ${done}/${ranges.length}`);
+                }
+            }
+        }
+
+        try {
+            await Promise.all(Array.from({ length: concurrency }, worker));
+            const blob = new Blob(parts, { type: contentType });
+            const elapsed = (Date.now() - startTime) / 1000;
+            log(`✓ Download done in ${elapsed.toFixed(1)}s (${fmtBytes(total / elapsed)}/s)`, 'ok');
+            const obj = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = obj; a.download = filename;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(obj), 1000);
+        } catch (e) {
+            log('Download failed: ' + e.message, 'err');
+        }
+    }
+
+    // ─── Wire up ─────────────────────────────────────────────
+    document.querySelectorAll('input[name=mode]').forEach(r => {
+        r.onchange = () => {
+            const mode = getMode();
+            if (mode === 's3' && +$('chunkSize').value < 5 * 1024 * 1024) {
+                $('chunkSize').value = '8388608';
+                log('Bumped chunk size to 8 MB (S3 multipart minimum is 5 MB)', 'warn');
+            }
+            updateModeBadge();
+            refreshFiles();
+        };
+    });
+
+    $('uploadBtn').onclick = uploadFile;
+    updateModeBadge();
+    refreshFiles();
+</script>
+
+</body>
+</html>

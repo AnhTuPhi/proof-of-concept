@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chunked Upload / Download POC</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #1e1e1e; color: #e6e6e6;
+               margin: 0; padding: 24px; max-width: 1100px; margin-inline: auto; }
+        h1 { font-size: 20px; margin-top: 0; }
+        h2 { font-size: 14px; margin: 0 0 12px 0; color: #9ec5fe; text-transform: uppercase; letter-spacing: 0.05em; }
+        .card { background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        label { font-size: 12px; color: #aaa; display: inline-flex; flex-direction: column; gap: 4px; }
+        input, select, button { font-family: inherit; font-size: 13px; padding: 6px 10px;
+                                border-radius: 4px; border: 1px solid #444; background: #1a1a1a; color: #eee; }
+        button { background: #2563eb; border-color: #2563eb; cursor: pointer; padding: 8px 16px; font-weight: 500; }
+        button:hover:not(:disabled) { background: #1d4ed8; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        button.secondary { background: #374151; border-color: #4b5563; }
+        button.secondary:hover { background: #4b5563; }
+        .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+        .progress-bar { height: 28px; background: #1a1a1a; border-radius: 4px; overflow: hidden;
+                        position: relative; margin: 12px 0 8px; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #9333ea); transition: width 0.3s; }
+        .progress-text { position: absolute; inset: 0; display: flex; align-items: center;
+                         justify-content: center; font-size: 12px; font-weight: 600; }
+        .chunks { display: grid; grid-template-columns: repeat(auto-fill, minmax(16px, 1fr));
+                  gap: 2px; margin: 8px 0; max-height: 120px; overflow-y: auto; }
+        .chunk { aspect-ratio: 1; background: #333; border-radius: 2px; min-height: 14px; }
+        .chunk.uploading { background: #fbbf24; animation: pulse 1s infinite; }
+        .chunk.done { background: #10b981; }
+        .chunk.failed { background: #ef4444; }
+        @keyframes pulse { 50% { opacity: 0.4; } }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+        .stat { background: #1a1a1a; padding: 8px 12px; border-radius: 4px; }
+        .stat-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+        .file-item { background: #1a1a1a; padding: 12px; border-radius: 4px; margin: 6px 0;
+                     display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .file-meta { font-size: 11px; color: #888; margin-top: 2px; }
+        .log { background: #0a0a0a; color: #9ca3af; font-family: 'Consolas', 'Courier New', monospace;
+               font-size: 11px; padding: 12px; border-radius: 4px; max-height: 240px; overflow-y: auto; line-height: 1.5; }
+        .log .ok { color: #10b981; }
+        .log .err { color: #ef4444; }
+        .log .warn { color: #fbbf24; }
+    </style>
+</head>
+<body>
+
+<h1>Chunked Upload / Download POC</h1>
+
+<div class="card">
+    <h2>Upload</h2>
+    <div class="row">
+        <label>File<input type="file" id="fileInput"></label>
+        <label>Chunk size
+            <select id="chunkSize">
+                <option value="1048576">1 MB</option>
+                <option value="4194304" selected>4 MB</option>
+                <option value="8388608">8 MB</option>
+                <option value="16777216">16 MB</option>
+                <option value="33554432">32 MB</option>
+            </select>
+        </label>
+        <label>Parallel
+            <select id="concurrency">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="4">4</option>
+                <option value="6" selected>6</option>
+                <option value="8">8</option>
+                <option value="12">12</option>
+            </select>
+        </label>
+        <button id="uploadBtn">Start Upload</button>
+    </div>
+
+    <div id="uploadArea" style="display: none; margin-top: 16px;">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progFill" style="width:0%"></div>
+            <div class="progress-text" id="progText">0%</div>
+        </div>
+        <div class="chunks" id="chunkGrid"></div>
+        <div class="stats">
+            <div class="stat"><div class="stat-label">Speed</div><div class="stat-value" id="speed">—</div></div>
+            <div class="stat"><div class="stat-label">Chunks</div><div class="stat-value" id="doneCount">0 / 0</div></div>
+            <div class="stat"><div class="stat-label">Retries</div><div class="stat-value" id="retries">0</div></div>
+            <div class="stat"><div class="stat-label">ETA</div><div class="stat-value" id="eta">—</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Files (parallel range download)</h2>
+    <div id="fileList"><i style="color:#888">Loading…</i></div>
+    <div style="margin-top: 8px;"><button class="secondary" onclick="refreshFiles()">Refresh</button></div>
+</div>
+
+<div class="card">
+    <h2>Log</h2>
+    <div class="log" id="log"></div>
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+
+    function log(msg, level) {
+        const el = $('log');
+        const cls = level ? ` class="${level}"` : '';
+        el.innerHTML = `<span${cls}>[${new Date().toLocaleTimeString()}] ${msg}</span><br>` + el.innerHTML;
+    }
+
+    function fmtBytes(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1024 ** 2) return (n / 1024).toFixed(1) + ' KB';
+        if (n < 1024 ** 3) return (n / 1024 ** 2).toFixed(1) + ' MB';
+        return (n / 1024 ** 3).toFixed(2) + ' GB';
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ─── Upload ──────────────────────────────────────────────
+    async function uploadFile() {
+        const file = $('fileInput').files[0];
+        if (!file) { alert('Pick a file first'); return; }
+
+        const chunkSize = +$('chunkSize').value;
+        const concurrency = +$('concurrency').value;
+        const totalChunks = Math.ceil(file.size / chunkSize);
+
+        $('uploadBtn').disabled = true;
+        $('uploadArea').style.display = 'block';
+        $('chunkGrid').innerHTML = '';
+        for (let i = 0; i < totalChunks; i++) {
+            const d = document.createElement('div');
+            d.className = 'chunk';
+            d.id = 'chunk-' + i;
+            $('chunkGrid').appendChild(d);
+        }
+        $('doneCount').textContent = `0 / ${totalChunks}`;
+        $('retries').textContent = '0';
+        $('speed').textContent = '—';
+        $('eta').textContent = '—';
+        $('progFill').style.width = '0%';
+        $('progText').textContent = '0%';
+
+        log(`Upload <b>${file.name}</b> (${fmtBytes(file.size)}) — ${totalChunks} chunks @ ${fmtBytes(chunkSize)}, ${concurrency} parallel`);
+
+        let uploadId;
+        try {
+            const initRes = await fetch('/api/uploads/init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type || 'application/octet-stream',
+                    totalSize: file.size,
+                    chunkSize
+                })
+            });
+            if (!initRes.ok) throw new Error('init failed: HTTP ' + initRes.status);
+            uploadId = (await initRes.json()).uploadId;
+            log(`uploadId = <code>${uploadId}</code>`);
+        } catch (e) {
+            log('Init failed: ' + e.message, 'err');
+            $('uploadBtn').disabled = false;
+            return;
+        }
+
+        const queue = Array.from({ length: totalChunks }, (_, i) => i);
+        let done = 0, retries = 0, uploadedBytes = 0;
+        const startTime = Date.now();
+
+        function updateStats() {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const pct = (done / totalChunks) * 100;
+            $('progFill').style.width = pct + '%';
+            $('progText').textContent = pct.toFixed(1) + '%';
+            $('doneCount').textContent = `${done} / ${totalChunks}`;
+            $('retries').textContent = retries;
+            const speed = elapsed > 0 ? uploadedBytes / elapsed : 0;
+            $('speed').textContent = fmtBytes(speed) + '/s';
+            const remaining = file.size - uploadedBytes;
+            $('eta').textContent = speed > 1024 ? Math.ceil(remaining / speed) + 's' : '—';
+        }
+
+        async function uploadChunk(index, attempt = 0) {
+            const start = index * chunkSize;
+            const blob = file.slice(start, Math.min(start + chunkSize, file.size));
+            $('chunk-' + index).className = 'chunk uploading';
+            try {
+                const res = await fetch(`/api/uploads/${uploadId}/chunks/${index}`, {
+                    method: 'PUT',
+                    body: blob,
+                    headers: { 'Content-Type': 'application/octet-stream' }
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                $('chunk-' + index).className = 'chunk done';
+                uploadedBytes += blob.size;
+                done++;
+                updateStats();
+            } catch (e) {
+                if (attempt >= 5) {
+                    $('chunk-' + index).className = 'chunk failed';
+                    throw e;
+                }
+                retries++;
+                updateStats();
+                log(`Chunk ${index} failed (${e.message}), retry ${attempt + 1}`, 'warn');
+                await sleep(250 * 2 ** attempt + Math.random() * 100);
+                return uploadChunk(index, attempt + 1);
+            }
+        }
+
+        async function worker() {
+            while (queue.length) {
+                const i = queue.shift();
+                if (i === undefined) break;
+                await uploadChunk(i);
+            }
+        }
+
+        try {
+            await Promise.all(Array.from({ length: concurrency }, worker));
+            log('All chunks uploaded, finalizing…');
+            const completeRes = await fetch(`/api/uploads/${uploadId}/complete`, { method: 'POST' });
+            if (!completeRes.ok) throw new Error('complete failed: HTTP ' + completeRes.status);
+            const result = await completeRes.json();
+            const elapsed = (Date.now() - startTime) / 1000;
+            const avgSpeed = file.size / elapsed;
+            log(`✓ DONE in ${elapsed.toFixed(1)}s (avg ${fmtBytes(avgSpeed)}/s) — fileId=<code>${result.fileId}</code>, sha256=<code>${result.sha256.slice(0, 16)}…</code>`, 'ok');
+            refreshFiles();
+        } catch (e) {
+            log('Upload failed: ' + e.message, 'err');
+        } finally {
+            $('uploadBtn').disabled = false;
+        }
+    }
+
+    // ─── Download ────────────────────────────────────────────
+    async function refreshFiles() {
+        try {
+            const res = await fetch('/api/files');
+            const files = await res.json();
+            const list = $('fileList');
+            if (!files.length) {
+                list.innerHTML = '<i style="color:#888">No files yet — upload something.</i>';
+                return;
+            }
+            list.innerHTML = '';
+            for (const f of files) {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.innerHTML = `
+                    <div>
+                        <div><b>${escapeHtml(f.filename)}</b></div>
+                        <div class="file-meta">${fmtBytes(f.size)} · sha256: <code>${f.sha256.slice(0, 24)}…</code></div>
+                    </div>`;
+                const btn = document.createElement('button');
+                btn.textContent = 'Parallel Download';
+                btn.onclick = () => downloadFile(f.fileId, f.filename, f.size, f.sha256);
+                item.appendChild(btn);
+                list.appendChild(item);
+            }
+        } catch (e) {
+            log('refreshFiles failed: ' + e.message, 'err');
+        }
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function downloadFile(fileId, filename, expectedSize, expectedSha256) {
+        const concurrency = 6;
+        const CHUNK = 4 * 1024 * 1024;
+
+        log(`Download <b>${filename}</b> (${fmtBytes(expectedSize)}) — ${concurrency} parallel ranges @ ${fmtBytes(CHUNK)}`);
+
+        const head = await fetch(`/api/files/${fileId}`, { method: 'HEAD' });
+        const total = +head.headers.get('Content-Length');
+        const acceptRanges = head.headers.get('Accept-Ranges');
+        if (acceptRanges !== 'bytes') { alert('Server does not support range requests'); return; }
+
+        const ranges = [];
+        for (let s = 0; s < total; s += CHUNK) ranges.push([s, Math.min(s + CHUNK - 1, total - 1)]);
+
+        const parts = new Array(ranges.length);
+        const queue = ranges.map((r, i) => ({ i, r }));
+        let done = 0;
+        const startTime = Date.now();
+
+        async function worker() {
+            while (queue.length) {
+                const job = queue.shift();
+                if (!job) break;
+                const [s, e] = job.r;
+                const res = await fetch(`/api/files/${fileId}`, { headers: { Range: `bytes=${s}-${e}` } });
+                if (res.status !== 206) throw new Error('expected 206, got ' + res.status);
+                parts[job.i] = await res.blob();
+                done++;
+                if (done % Math.max(1, Math.floor(ranges.length / 10)) === 0) {
+                    log(`Range progress ${done}/${ranges.length}`);
+                }
+            }
+        }
+
+        try {
+            await Promise.all(Array.from({ length: concurrency }, worker));
+            const blob = new Blob(parts, { type: head.headers.get('Content-Type') || 'application/octet-stream' });
+            const elapsed = (Date.now() - startTime) / 1000;
+            log(`✓ Download done in ${elapsed.toFixed(1)}s (${fmtBytes(total / elapsed)}/s)`, 'ok');
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) {
+            log('Download failed: ' + e.message, 'err');
+        }
+    }
+
+    $('uploadBtn').onclick = uploadFile;
+    refreshFiles();
+</script>
+
+</body>
+</html>

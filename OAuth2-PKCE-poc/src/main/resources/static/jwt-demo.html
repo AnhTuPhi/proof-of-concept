@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>JWT Refresh Rotation Demo</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="container">
+    <nav><a href="/">← Home</a></nav>
+    <h1>JWT Refresh Rotation + Reuse Detection</h1>
+    <p class="subtitle">Demonstrates the most important property: if a stolen refresh token is reused, the entire token <strong>family</strong> is revoked.</p>
+
+    <section>
+      <h2 class="section">1. Login</h2>
+      <div class="row">
+        <input id="username" type="text" placeholder="username" value="alice">
+        <input id="password" type="password" placeholder="password" value="password">
+        <button id="loginBtn">Login</button>
+      </div>
+      <div id="state" class="row" style="margin-top:12px;font-family:var(--mono);font-size:0.85rem"></div>
+    </section>
+
+    <section>
+      <h2 class="section">2. Normal rotation</h2>
+      <p class="subtitle">Repeated refresh calls — each replaces the previous refresh token within the same family.</p>
+      <div class="row">
+        <button id="refreshBtn" disabled>POST /auth/refresh (use current refresh token)</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section">3. Simulate token theft</h2>
+      <p class="subtitle">
+        Click <strong>Save snapshot</strong> to remember the current refresh token (as if an attacker stole it).
+        Then click <strong>Refresh once</strong> as the legit user (rotates to a new token).
+        Then click <strong>Replay stolen token</strong> — server detects reuse and revokes the whole family.
+      </p>
+      <div class="row">
+        <button id="snapshotBtn" class="warn" disabled>📸 Save snapshot (simulate steal)</button>
+        <button id="replayBtn" class="danger" disabled>💣 Replay stolen token</button>
+      </div>
+      <p>Saved attacker token: <code id="stolen">(none)</code></p>
+    </section>
+
+    <section>
+      <h2 class="section">Server snapshot</h2>
+      <div class="row">
+        <button id="debugBtn" class="ghost">Refresh /auth/debug</button>
+      </div>
+      <pre id="debug">(not loaded)</pre>
+    </section>
+
+    <h2 class="section">Request log</h2>
+    <div id="log" class="log"></div>
+  </main>
+
+  <script>
+    const log = document.getElementById('log');
+    const out = (msg, cls = '') => {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + cls;
+      div.textContent = msg;
+      log.prepend(div);
+    };
+
+    const stateEl = document.getElementById('state');
+    let tokens = null;
+    let stolen = null;
+
+    function shortToken(t) { return t ? t.slice(0, 18) + '…' + t.slice(-8) : '(none)'; }
+
+    function renderState() {
+      stateEl.innerHTML = tokens
+        ? `<span class="badge success">Logged in</span> family=<code>${tokens.familyId}</code> refresh=<code>${shortToken(tokens.refreshToken)}</code>`
+        : '<span class="badge">Not authenticated</span>';
+      document.getElementById('refreshBtn').disabled = !tokens;
+      document.getElementById('snapshotBtn').disabled = !tokens;
+    }
+    renderState();
+
+    document.getElementById('loginBtn').onclick = async () => {
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      out(`POST /auth/login {username:"${u}"}`, 'info');
+      const res = await fetch('/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: u, password: p })
+      });
+      const data = await res.json();
+      if (!res.ok) { out(`← ${res.status} ${JSON.stringify(data)}`, 'err'); return; }
+      tokens = data;
+      out(`← 200 family=${data.familyId} refresh=${shortToken(data.refreshToken)}`, 'ok');
+      renderState();
+    };
+
+    async function callRefresh(token) {
+      out(`POST /auth/refresh {refreshToken:${shortToken(token)}}`, 'info');
+      const res = await fetch('/auth/refresh', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: token })
+      });
+      const data = await res.json();
+      return { res, data };
+    }
+
+    document.getElementById('refreshBtn').onclick = async () => {
+      const { res, data } = await callRefresh(tokens.refreshToken);
+      if (!res.ok) {
+        out(`← ${res.status} ${JSON.stringify(data)}`, 'err');
+        tokens = null; renderState();
+        return;
+      }
+      tokens = data;
+      out(`← 200 rotated. new refresh=${shortToken(data.refreshToken)} family=${data.familyId}`, 'ok');
+      renderState();
+    };
+
+    document.getElementById('snapshotBtn').onclick = () => {
+      stolen = tokens.refreshToken;
+      document.getElementById('stolen').textContent = shortToken(stolen);
+      document.getElementById('replayBtn').disabled = false;
+      out(`📸 Saved snapshot of refresh token ${shortToken(stolen)} (attacker storage)`, 'warn');
+    };
+
+    document.getElementById('replayBtn').onclick = async () => {
+      out(`(legit user rotates first…)`, 'info');
+      const first = await callRefresh(stolen);
+      if (first.res.ok) {
+        tokens = first.data;
+        out(`← 200 legit rotation OK family=${first.data.familyId}`, 'ok');
+        renderState();
+      } else {
+        out(`← ${first.res.status} ${JSON.stringify(first.data)}`, 'err');
+      }
+      out(`(attacker replays the snapshotted token…)`, 'warn');
+      const second = await callRefresh(stolen);
+      out(`← ${second.res.status} ${JSON.stringify(second.data)}`,
+          second.res.ok ? 'ok' : 'err');
+      out('🚨 Family revoked — legit user is now signed out as well. They must re-login.', 'err');
+      tokens = null; renderState();
+    };
+
+    document.getElementById('debugBtn').onclick = async () => {
+      const res = await fetch('/auth/debug');
+      document.getElementById('debug').textContent = JSON.stringify(await res.json(), null, 2);
+    };
+  </script>
+</body>
+</html>

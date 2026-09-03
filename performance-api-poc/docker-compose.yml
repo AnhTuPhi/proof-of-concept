@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: perf-poc-pg
+    environment:
+      POSTGRES_USER: poc
+      POSTGRES_PASSWORD: poc
+      POSTGRES_DB: poc
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-1:
+    image: redis:7-alpine
+    container_name: perf-poc-redis-1
+    ports:
+      - "6379:6379"
+
+  redis-2:
+    image: redis:7-alpine
+    container_name: perf-poc-redis-2
+    ports:
+      - "6380:6379"
+
+  redis-3:
+    image: redis:7-alpine
+    container_name: perf-poc-redis-3
+    ports:
+      - "6381:6379"
+
+  # Khởi động on-demand cho demo "thêm node": docker compose --profile scale up redis-4
+  redis-4:
+    image: redis:7-alpine
+    container_name: perf-poc-redis-4
+    ports:
+      - "6382:6379"
+    profiles: ["scale"]

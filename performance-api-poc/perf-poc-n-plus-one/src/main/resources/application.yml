@@ -1,0 +1,34 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: perf-poc-n-plus-one
+  datasource:
+    url: jdbc:p6spy:postgresql://localhost:5432/poc_nplus1
+    driver-class-name: com.p6spy.engine.spy.P6SpyDriver
+    username: poc
+    password: poc
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        generate_statistics: true
+        format_sql: true
+    show-sql: false   # Để p6spy log SQL có timing thay vì spring log thô
+
+query-count:
+  warn-threshold: 5
+
+logging:
+  level:
+    p6spy: info
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

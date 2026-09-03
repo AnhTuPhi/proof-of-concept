@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ETag &amp; 304 Demo</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="container">
+    <nav><a href="/">← Home</a></nav>
+    <h1>ETag + If-None-Match</h1>
+    <p class="subtitle">Login first (left), then fetch a product (right). Click "Fetch again" — the second request includes <code>If-None-Match</code> and should return <code>304</code>.</p>
+
+    <div class="col-2">
+      <section>
+        <h2 class="section">1. Login</h2>
+        <div class="row">
+          <input id="username" type="text" placeholder="username" value="alice">
+          <input id="password" type="password" placeholder="password" value="password">
+          <button id="loginBtn">Login</button>
+        </div>
+        <p id="authStatus" class="info"></p>
+      </section>
+
+      <section>
+        <h2 class="section">2. Fetch product</h2>
+        <div class="row">
+          <input id="productId" type="text" value="1000" style="max-width:120px">
+          <button id="fetchBtn" disabled>Fetch</button>
+          <button id="fetchAgainBtn" class="ghost" disabled>Fetch again (with If-None-Match)</button>
+        </div>
+        <p>Last ETag: <code id="lastEtag">(none)</code></p>
+      </section>
+    </div>
+
+    <h2 class="section">Request log</h2>
+    <div id="log" class="log"></div>
+  </main>
+
+  <script>
+    const log = document.getElementById('log');
+    const out = (msg, cls='') => {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + cls;
+      div.textContent = msg;
+      log.prepend(div);
+    };
+
+    let accessToken = null;
+    let lastEtag = null;
+
+    document.getElementById('loginBtn').onclick = async () => {
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      out(`POST /auth/login  body={username:"${u}", password:"***"}`, 'info');
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: u, password: p })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        out(`← ${res.status} ${JSON.stringify(data)}`, 'err');
+        return;
+      }
+      accessToken = data.accessToken;
+      document.getElementById('fetchBtn').disabled = false;
+      document.getElementById('authStatus').textContent = `Logged in. Token expires ${data.accessExpiresAt}`;
+      out(`← 200 access token acquired`, 'ok');
+    };
+
+    async function fetchProduct(withIfNoneMatch) {
+      const id = document.getElementById('productId').value;
+      const headers = { 'Authorization': 'Bearer ' + accessToken };
+      if (withIfNoneMatch && lastEtag) headers['If-None-Match'] = lastEtag;
+      out(`GET /api/products/${id}  ${withIfNoneMatch && lastEtag ? `If-None-Match: ${lastEtag}` : '(no If-None-Match)'}`, 'info');
+      const res = await fetch('/api/products/' + id, { headers });
+      const etag = res.headers.get('ETag');
+      if (res.status === 304) {
+        out(`← 304 Not Modified  ETag=${etag}  (no body — bandwidth saved!)`, 'ok');
+        return;
+      }
+      const body = await res.json();
+      lastEtag = etag;
+      document.getElementById('lastEtag').textContent = etag || '(none)';
+      document.getElementById('fetchAgainBtn').disabled = !etag;
+      out(`← ${res.status}  ETag=${etag}  body=${JSON.stringify(body)}`, 'ok');
+    }
+
+    document.getElementById('fetchBtn').onclick = () => fetchProduct(false);
+    document.getElementById('fetchAgainBtn').onclick = () => fetchProduct(true);
+  </script>
+</body>
+</html>

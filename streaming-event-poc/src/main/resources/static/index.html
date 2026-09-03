@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Realtime Patterns POC</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --text: #c9d1d9;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --border: #30363d;
+    --muted: #8b949e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { margin: 0 0 8px; font-size: 22px; }
+  .lede { color: var(--muted); margin: 0 0 24px; max-width: 920px; font-size: 13px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card h2 { margin: 0 0 6px; font-size: 15px; color: var(--accent); }
+  .desc { font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.45; }
+  .endpoint {
+    font-family: "Cascadia Code", Consolas, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    background: #0d1117;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    margin-bottom: 10px;
+    display: inline-block;
+  }
+  .controls { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  button {
+    background: var(--accent);
+    color: #0d1117;
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+  }
+  button.stop { background: var(--red); color: white; }
+  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-family: "Cascadia Code", Consolas, monospace;
+  }
+  .status .on { color: var(--green); }
+  .status .off { color: var(--red); }
+  .log {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px;
+    height: 280px;
+    overflow-y: auto;
+    font-size: 11px;
+    font-family: "Cascadia Code", Consolas, monospace;
+  }
+  .row {
+    padding: 2px 4px;
+    border-bottom: 1px dashed var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .symbol { font-weight: 700; min-width: 44px; color: var(--accent); }
+  .price { min-width: 70px; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+  .meta { color: var(--muted); font-size: 10px; margin-left: auto; }
+  footer { color: var(--muted); font-size: 11px; margin-top: 24px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1>Real-time Communication Patterns — Java 21 / Spring Boot 3.4</h1>
+  <p class="lede">
+    Cùng 1 stream stock price giả lập (tick mỗi 500ms), 4 cách deliver xuống client.
+    Open DevTools → Network để xem từng transport hoạt động khác nhau.
+  </p>
+
+  <div class="grid">
+
+    <div class="card">
+      <h2>1. Server-Sent Events (SSE)</h2>
+      <div class="desc">One-way server → client over HTTP/1.1. Auto-reconnect built-in. Browser native (EventSource). Hợp cho notification, price ticker, progress bar.</div>
+      <div class="endpoint">GET /sse/prices · text/event-stream</div>
+      <div class="controls">
+        <button id="sseStart">Start</button>
+        <button id="sseStop" class="stop">Stop</button>
+      </div>
+      <div class="status">status: <span id="sseStatus" class="off">disconnected</span> · events: <span id="sseCount">0</span></div>
+      <div class="log" id="sseLog"></div>
+    </div>
+
+    <div class="card">
+      <h2>2. WebSocket + STOMP</h2>
+      <div class="desc">Full-duplex bi-directional over TCP. Multi-topic subscribe. Hợp cho chat, trading desk, multiplayer. Cần handshake upgrade (vài corp proxy chặn).</div>
+      <div class="endpoint">WS /ws · SUBSCRIBE /topic/prices</div>
+      <div class="controls">
+        <button id="wsStart">Start</button>
+        <button id="wsStop" class="stop">Stop</button>
+        <button id="wsPing" class="ghost">Ping</button>
+      </div>
+      <div class="status">status: <span id="wsStatus" class="off">disconnected</span> · events: <span id="wsCount">0</span></div>
+      <div class="log" id="wsLog"></div>
+    </div>
+
+    <div class="card">
+      <h2>3. Long-polling (fallback)</h2>
+      <div class="desc">Client GET, server giữ request bằng DeferredResult đến khi có data hoặc timeout. Cursor-based — không miss event giữa hai vòng.</div>
+      <div class="endpoint">GET /poll/prices?cursor=N&amp;timeoutMs=25000</div>
+      <div class="controls">
+        <button id="lpStart">Start</button>
+        <button id="lpStop" class="stop">Stop</button>
+      </div>
+      <div class="status">status: <span id="lpStatus" class="off">idle</span> · cursor: <span id="lpCursor">0</span> · events: <span id="lpCount">0</span></div>
+      <div class="log" id="lpLog"></div>
+    </div>
+
+    <div class="card">
+      <h2>4. gRPC streaming</h2>
+      <div class="desc">HTTP/2 + protobuf. Bi-directional streaming với type-safe stubs. Hợp service-to-service, mobile. Browser cần grpc-web proxy — demo này dùng REST bridge gọi tới gRPC server local.</div>
+      <div class="endpoint">gRPC :9090 · PriceStreamService.streamPrices</div>
+      <div class="controls">
+        <button id="grpcRun">Run demo (collect 10 events)</button>
+      </div>
+      <div class="status">status: <span id="grpcStatus" class="off">idle</span> · events: <span id="grpcCount">0</span></div>
+      <div class="log" id="grpcLog"></div>
+    </div>
+
+  </div>
+
+  <footer>
+    Backend: <a href="/sse/stats" target="_blank">/sse/stats</a> ·
+    <a href="https://github.com/grpc/grpc-java" target="_blank">grpc-java</a> ·
+    Generator emits 1-3 price updates every 500ms across 7 Vietnamese symbols (VND, FPT, HPG, VIC, MWG, VHM, MBB).
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+  <script>
+    function nowTs() { return new Date().toLocaleTimeString(); }
+
+    function pushPriceRow(logId, countId, ev) {
+      const log = document.getElementById(logId);
+      const change = Number(ev.change);
+      const changePct = Number(ev.changePercent);
+      const price = Number(ev.price);
+      const cls = change >= 0 ? "up" : "down";
+      const sign = change >= 0 ? "+" : "";
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML =
+        '<span class="symbol">' + ev.symbol + '</span>' +
+        '<span class="price ' + cls + '">' + price.toFixed(2) + '</span>' +
+        '<span class="' + cls + '">' + sign + changePct.toFixed(2) + '%</span>' +
+        '<span class="meta">' + nowTs() + '</span>';
+      log.prepend(row);
+      while (log.childElementCount > 50) log.lastChild.remove();
+      const c = document.getElementById(countId);
+      c.textContent = (Number(c.textContent) + 1);
+    }
+
+    function setStatus(id, on, text) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = on ? "on" : "off";
+    }
+
+    // ---- 1. SSE ----
+    let sse = null;
+    document.getElementById("sseStart").onclick = () => {
+      if (sse) return;
+      sse = new EventSource("/sse/prices");
+      setStatus("sseStatus", true, "connecting...");
+      sse.addEventListener("hello", () => setStatus("sseStatus", true, "connected"));
+      sse.addEventListener("price", (e) => {
+        try {
+          const ev = JSON.parse(e.data);
+          pushPriceRow("sseLog", "sseCount", ev);
+        } catch (err) { console.error(err); }
+      });
+      sse.onerror = () => setStatus("sseStatus", false, "reconnecting...");
+    };
+    document.getElementById("sseStop").onclick = () => {
+      if (sse) { sse.close(); sse = null; setStatus("sseStatus", false, "disconnected"); }
+    };
+
+    // ---- 2. WebSocket + STOMP ----
+    let stomp = null;
+    document.getElementById("wsStart").onclick = () => {
+      if (stomp && stomp.active) return;
+      stomp = new StompJs.Client({
+        webSocketFactory: () => new SockJS("/ws"),
+        reconnectDelay: 3000
+      });
+      stomp.onConnect = () => {
+        setStatus("wsStatus", true, "connected");
+        stomp.subscribe("/topic/prices", (msg) => {
+          try {
+            const ev = JSON.parse(msg.body);
+            pushPriceRow("wsLog", "wsCount", ev);
+          } catch (err) { console.error(err); }
+        });
+        stomp.subscribe("/topic/pong", (msg) => {
+          const log = document.getElementById("wsLog");
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = '<span class="symbol">PONG</span><span class="meta">' + msg.body + '</span>';
+          log.prepend(row);
+        });
+      };
+      stomp.onWebSocketClose = () => setStatus("wsStatus", false, "reconnecting...");
+      stomp.onStompError = (frame) => setStatus("wsStatus", false, "error: " + frame.headers["message"]);
+      stomp.activate();
+    };
+    document.getElementById("wsStop").onclick = () => {
+      if (stomp) { stomp.deactivate(); setStatus("wsStatus", false, "disconnected"); stomp = null; }
+    };
+    document.getElementById("wsPing").onclick = () => {
+      if (stomp && stomp.connected) {
+        stomp.publish({ destination: "/app/ping", body: "hello " + nowTs() });
+      }
+    };
+
+    // ---- 3. Long-polling ----
+    let lpRunning = false;
+    let lpCursor = 0;
+    async function lpLoop() {
+      while (lpRunning) {
+        setStatus("lpStatus", true, "waiting...");
+        try {
+          const r = await fetch("/poll/prices?cursor=" + lpCursor + "&timeoutMs=25000");
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const body = await r.json();
+          if (body.cursor > lpCursor) lpCursor = body.cursor;
+          document.getElementById("lpCursor").textContent = lpCursor;
+          if (body.data && body.data.length) {
+            setStatus("lpStatus", true, "received " + body.data.length);
+            body.data.forEach(ev => pushPriceRow("lpLog", "lpCount", ev));
+          } else {
+            setStatus("lpStatus", true, "empty (timeout)");
+          }
+        } catch (e) {
+          setStatus("lpStatus", false, "error, retrying");
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+      setStatus("lpStatus", false, "idle");
+    }
+    document.getElementById("lpStart").onclick = () => {
+      if (lpRunning) return;
+      lpRunning = true;
+      lpLoop();
+    };
+    document.getElementById("lpStop").onclick = () => { lpRunning = false; };
+
+    // ---- 4. gRPC via REST bridge ----
+    document.getElementById("grpcRun").onclick = async () => {
+      setStatus("grpcStatus", true, "calling gRPC stream...");
+      try {
+        const r = await fetch("/api/grpc/demo?count=10&symbols=VND,FPT,HPG,VIC");
+        const body = await r.json();
+        setStatus("grpcStatus", true, "received " + body.count + " (ok=" + body.ok + ")");
+        body.data.forEach(ev => pushPriceRow("grpcLog", "grpcCount", ev));
+      } catch (e) {
+        setStatus("grpcStatus", false, "error: " + e.message);
+      }
+    };
+  </script>
+</body>
+</html>

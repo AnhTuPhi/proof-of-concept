@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package vn.com.poc.realtime.grpc;
+
+option java_package = "vn.com.poc.realtime.grpc.proto";
+option java_multiple_files = true;
+option java_outer_classname = "PriceStreamProto";
+
+service PriceStreamService {
+  // Bi-directional streaming: client subscribe/unsubscribe symbols any time,
+  // server pushes matching price updates as they arrive.
+  rpc StreamPrices (stream SubscribeRequest) returns (stream PriceUpdate);
+
+  // Server-streaming: client picks symbols once, server streams forever.
+  rpc Watch (WatchRequest) returns (stream PriceUpdate);
+}
+
+message SubscribeRequest {
+  enum Action {
+    SUBSCRIBE = 0;
+    UNSUBSCRIBE = 1;
+  }
+  Action action = 1;
+  repeated string symbols = 2;
+}
+
+message WatchRequest {
+  repeated string symbols = 1;
+}
+
+message PriceUpdate {
+  string symbol = 1;
+  double price = 2;
+  double change = 3;
+  double change_percent = 4;
+  int64 timestamp_millis = 5;
+  int64 volume = 6;
+}

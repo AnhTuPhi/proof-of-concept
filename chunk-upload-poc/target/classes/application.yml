@@ -1,0 +1,22 @@
+server:
+  port: 8080
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
+    connection-timeout: 60000
+
+spring:
+  servlet:
+    multipart:
+      enabled: false
+  mvc:
+    async:
+      request-timeout: 300000
+
+poc:
+  storage-dir: ./storage
+
+logging:
+  level:
+    com.poc.upload: DEBUG
+    org.springframework.web: INFO

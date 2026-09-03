@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: resilience-patterns-demo
+  threads:
+    virtual:
+      enabled: true   # Java 21 — virtual threads for Tomcat request handling
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers,retries,bulkheads
+  endpoint:
+    health:
+      show-details: always
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      flakey:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50          # open when ≥50% of last window failed
+        waitDurationInOpenState: 5s       # then sit in OPEN for 5s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true
+
+  retry:
+    instances:
+      flakeyRetry:
+        maxAttempts: 5
+        waitDuration: 200ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2   # 200, 400, 800, 1600ms ...
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.5         # ± 50% jitter — kills the thundering herd
+        retryExceptions:
+          - com.demo.resilience.downstream.DownstreamUnavailableException
+
+  bulkhead:
+    instances:
+      serviceA:
+        maxConcurrentCalls: 5             # only 5 in-flight at a time
+        maxWaitDuration: 0                # excess callers rejected immediately
+      serviceB:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 0
+
+logging:
+  level:
+    com.demo.resilience: INFO
+    io.github.resilience4j: INFO

@@ -1,0 +1,30 @@
+server:
+  port: 8080
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
+    connection-timeout: 60000
+
+spring:
+  servlet:
+    multipart:
+      enabled: false
+  mvc:
+    async:
+      request-timeout: 300000
+
+poc:
+  storage-dir: ./storage
+  s3:
+    endpoint: http://localhost:9000
+    region: us-east-1
+    bucket: poc-uploads
+    access-key: admin
+    secret-key: admin12345
+    path-style: true
+
+logging:
+  level:
+    com.poc.upload: DEBUG
+    org.springframework.web: INFO
+    software.amazon.awssdk: WARN

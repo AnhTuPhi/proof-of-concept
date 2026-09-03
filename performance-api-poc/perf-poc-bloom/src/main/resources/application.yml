@@ -1,0 +1,31 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: perf-poc-bloom
+  datasource:
+    url: jdbc:postgresql://localhost:5432/poc_bloom
+    username: poc
+    password: poc
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.batch_size: 100
+        order_inserts: true
+
+bloom:
+  expected-insertions: 200000
+  false-positive-probability: 0.01
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Web API POC</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Web / API Patterns — POC</h1>
+      <p class="subtitle">4 patterns every backend dev should know. All running on <code>http://localhost:8080</code>.</p>
+    </header>
+
+    <section class="grid">
+      <a class="card" href="/etag-demo.html">
+        <h2>1. ETag &amp; 304</h2>
+        <p>Conditional GET. Server returns <code>ETag</code> → client sends <code>If-None-Match</code> → server replies <code>304 Not Modified</code> with no body. Saves bandwidth.</p>
+        <span class="tag">HTTP caching</span>
+      </a>
+
+      <a class="card" href="/pkce-demo.html">
+        <h2>2. OAuth2 PKCE</h2>
+        <p>Authorization Code flow with PKCE for public clients (SPA, mobile). Never expose a client secret again.</p>
+        <span class="tag">Authn</span>
+      </a>
+
+      <a class="card" href="/jwt-demo.html">
+        <h2>3. JWT Refresh Rotation</h2>
+        <p>Short-lived access + rotating refresh tokens. <strong>Reuse detection</strong> revokes the entire token family on replay.</p>
+        <span class="tag">Token security</span>
+      </a>
+
+      <a class="card" href="/content-negotiation-demo.html">
+        <h2>4. Content Negotiation</h2>
+        <p>Same URL, different schemas. Vendor media types, version parameter, custom header — three pragmatic styles.</p>
+        <span class="tag">API versioning</span>
+      </a>
+    </section>
+
+    <footer>
+      <p>Demo credentials: <code>alice / password</code> &nbsp;|&nbsp; <code>bob / hunter2</code></p>
+      <p>See <code>README.md</code> for curl examples.</p>
+    </footer>
+  </main>
+</body>
+</html>

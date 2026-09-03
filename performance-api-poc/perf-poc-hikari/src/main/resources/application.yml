@@ -1,0 +1,50 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: perf-poc-hikari
+  datasource:
+    url: jdbc:postgresql://localhost:5432/poc_hikari
+    username: poc
+    password: poc
+    hikari:
+      pool-name: perf-poc-hikari
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 3000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 5000
+      register-mbeans: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    enable:
+      hikaricp: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: small-pool
+  datasource:
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 2
+
+---
+spring:
+  config:
+    activate:
+      on-profile: tuned
+  datasource:
+    hikari:
+      # Rule of thumb của Hikari wiki: connections = ((core_count * 2) + effective_spindle_count)
+      # Trên dev box (8 core, SSD): ~20 là điểm bắt đầu
+      maximum-pool-size: 20
+      minimum-idle: 10

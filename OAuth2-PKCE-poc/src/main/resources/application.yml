@@ -1,0 +1,33 @@
+server:
+  port: 8080
+  # Important for ETag filter — must be enabled to support shallow ETag if used
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: web-api-poc
+  jackson:
+    default-property-inclusion: non_null
+
+# POC configuration
+app:
+  jwt:
+    # 256-bit HMAC secret (POC only — production uses RSA/EC private key from KMS)
+    secret: "ThisIsAVeryLongSecretKeyForHs256JwtPocOnlyDoNotUseInProd!!"
+    issuer: "web-api-poc"
+    access-ttl-seconds: 300         # 5 minutes
+    refresh-ttl-seconds: 604800     # 7 days
+  oauth:
+    # Registered demo client (public client → no client_secret, PKCE required)
+    client-id: "demo-spa"
+    redirect-uri: "http://localhost:8080/pkce-demo.html"
+    # Auth code TTL
+    code-ttl-seconds: 60
+
+logging:
+  level:
+    com.example.webapipoc: DEBUG
+    org.springframework.security: INFO

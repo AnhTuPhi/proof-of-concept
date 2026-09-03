@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OAuth2 PKCE Demo</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="container">
+    <nav><a href="/">← Home</a></nav>
+    <h1>OAuth2 Authorization Code + PKCE</h1>
+    <p class="subtitle">Public-client flow: SPA generates <code>code_verifier</code> in browser → derives <code>code_challenge</code> via SHA-256 → only the verifier proves possession at token exchange. No client secret needed.</p>
+
+    <section>
+      <h2 class="section">Flow steps</h2>
+      <ol>
+        <li><strong>Generate verifier</strong> — random 43–128 char URL-safe string, stored in <code>sessionStorage</code>.</li>
+        <li><strong>Derive challenge</strong> — <code>BASE64URL(SHA-256(code_verifier))</code>.</li>
+        <li><strong>Redirect to /oauth/authorize</strong> with the challenge (browser-visible).</li>
+        <li><strong>Receive code via redirect back here</strong>.</li>
+        <li><strong>POST /oauth/token</strong> with code + verifier — server matches verifier to stored challenge, issues JWT.</li>
+      </ol>
+
+      <div class="row">
+        <button id="startBtn">🚀 Start PKCE flow</button>
+        <button id="clearBtn" class="ghost">Clear session</button>
+      </div>
+      <p>Stored verifier: <code id="verifier">(none)</code></p>
+      <p>Stored challenge: <code id="challenge">(none)</code></p>
+      <p>Stored state: <code id="storedState">(none)</code></p>
+    </section>
+
+    <section>
+      <h2 class="section">Result</h2>
+      <pre id="result">(no token yet)</pre>
+    </section>
+
+    <h2 class="section">Request log</h2>
+    <div id="log" class="log"></div>
+  </main>
+
+  <script>
+    const log = document.getElementById('log');
+    const out = (msg, cls = '') => {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + cls;
+      div.textContent = msg;
+      log.prepend(div);
+    };
+
+    // --- PKCE helpers ---
+    function randomString(byteLen) {
+      const buf = new Uint8Array(byteLen);
+      crypto.getRandomValues(buf);
+      return base64Url(buf);
+    }
+
+    function base64Url(buffer) {
+      const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
+      let bin = '';
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    async function sha256(str) {
+      const data = new TextEncoder().encode(str);
+      const hash = await crypto.subtle.digest('SHA-256', data);
+      return base64Url(hash);
+    }
+
+    const CLIENT_ID = 'demo-spa';
+    const REDIRECT_URI = window.location.origin + '/pkce-demo.html';
+
+    function renderStored() {
+      document.getElementById('verifier').textContent = sessionStorage.getItem('pkce_verifier') || '(none)';
+      document.getElementById('challenge').textContent = sessionStorage.getItem('pkce_challenge') || '(none)';
+      document.getElementById('storedState').textContent = sessionStorage.getItem('pkce_state') || '(none)';
+    }
+    renderStored();
+
+    document.getElementById('startBtn').onclick = async () => {
+      const verifier = randomString(48);
+      const challenge = await sha256(verifier);
+      const state = randomString(16);
+      sessionStorage.setItem('pkce_verifier', verifier);
+      sessionStorage.setItem('pkce_challenge', challenge);
+      sessionStorage.setItem('pkce_state', state);
+      renderStored();
+      out(`Generated verifier (${verifier.length} chars), challenge=${challenge.slice(0,20)}…`, 'info');
+
+      const url = new URL(window.location.origin + '/oauth/authorize');
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('client_id', CLIENT_ID);
+      url.searchParams.set('redirect_uri', REDIRECT_URI);
+      url.searchParams.set('state', state);
+      url.searchParams.set('code_challenge', challenge);
+      url.searchParams.set('code_challenge_method', 'S256');
+      url.searchParams.set('subject', 'alice');  // POC shortcut — production uses login form
+      out(`Redirecting to ${url.toString()}`, 'info');
+      window.location.href = url.toString();
+    };
+
+    document.getElementById('clearBtn').onclick = () => {
+      sessionStorage.removeItem('pkce_verifier');
+      sessionStorage.removeItem('pkce_challenge');
+      sessionStorage.removeItem('pkce_state');
+      renderStored();
+      document.getElementById('result').textContent = '(no token yet)';
+      out('Cleared sessionStorage', 'info');
+    };
+
+    // --- On return from /oauth/authorize, parse ?code=... and exchange for token ---
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const returnedState = params.get('state');
+      const err = params.get('error');
+      if (err) { out(`Auth server returned error=${err}`, 'err'); return; }
+      if (!code) return;
+      const expectedState = sessionStorage.getItem('pkce_state');
+      if (returnedState !== expectedState) {
+        out(`state mismatch! returned=${returnedState} expected=${expectedState}`, 'err');
+        return;
+      }
+      const verifier = sessionStorage.getItem('pkce_verifier');
+      out(`Got code=${code.slice(0,12)}… exchanging at /oauth/token`, 'info');
+
+      const body = new URLSearchParams();
+      body.set('grant_type', 'authorization_code');
+      body.set('code', code);
+      body.set('code_verifier', verifier);
+      body.set('client_id', CLIENT_ID);
+      body.set('redirect_uri', REDIRECT_URI);
+
+      const res = await fetch('/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+      });
+      const data = await res.json();
+      document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+      if (!res.ok) { out(`← ${res.status} token exchange failed: ${JSON.stringify(data)}`, 'err'); return; }
+      out(`← 200 token exchange OK. access=${data.access_token.slice(0,18)}…`, 'ok');
+
+      // Clean URL so a refresh doesn't re-trigger the exchange
+      window.history.replaceState({}, '', '/pkce-demo.html');
+    })();
+  </script>
+</body>
+</html>

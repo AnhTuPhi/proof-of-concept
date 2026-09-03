@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: concurrency-distributed-patterns-demo
+  datasource:
+    url: jdbc:h2:mem:demo;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+      path: /h2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+demo:
+  redlock:
+    nodes: 5
+    quorum: 3
+    clock-drift-ms: 5
+  outbox:
+    poll-interval-ms: 1000
+    batch-size: 50
+
+logging:
+  level:
+    com.demo.patterns: INFO

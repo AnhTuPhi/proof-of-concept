@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: realtime-poc
+  threads:
+    virtual:
+      enabled: true
+  mvc:
+    async:
+      request-timeout: 60000
+
+grpc:
+  port: 9090
+
+logging:
+  level:
+    root: INFO
+    vn.com.poc.realtime: INFO
+    org.springframework.web.socket: INFO

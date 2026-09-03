@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Content Negotiation Demo</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <main class="container">
+    <nav><a href="/">← Home</a></nav>
+    <h1>Content Negotiation</h1>
+    <p class="subtitle">Same URL <code>GET /api/users/{id}</code> — different shape per requested version. No auth needed for this demo.</p>
+
+    <div class="row">
+      <label>User ID:
+        <input id="userId" type="text" value="1" style="max-width:80px">
+      </label>
+    </div>
+
+    <section>
+      <h2 class="section">A. Vendor media type</h2>
+      <p>Server uses different controller methods based on <code>Accept</code>.</p>
+      <div class="row">
+        <button data-style="vendor" data-v="1">Accept: application/vnd.webapipoc.v1+json</button>
+        <button data-style="vendor" data-v="2">Accept: application/vnd.webapipoc.v2+json</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section">B. Accept param</h2>
+      <div class="row">
+        <button data-style="accept-param" data-v="1">Accept: application/json;version=1</button>
+        <button data-style="accept-param" data-v="2">Accept: application/json;version=2</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section">C. Custom header</h2>
+      <div class="row">
+        <button data-style="header" data-v="1">Api-Version: 1</button>
+        <button data-style="header" data-v="2">Api-Version: 2</button>
+        <button data-style="default">No version hint (defaults to latest)</button>
+      </div>
+    </section>
+
+    <h2 class="section">Response</h2>
+    <pre id="response">(none yet)</pre>
+
+    <h2 class="section">Request log</h2>
+    <div id="log" class="log"></div>
+  </main>
+
+  <script>
+    const log = document.getElementById('log');
+    const out = (msg, cls = '') => {
+      const div = document.createElement('div');
+      div.className = 'log-line ' + cls;
+      div.textContent = msg;
+      log.prepend(div);
+    };
+
+    document.querySelectorAll('button[data-style]').forEach(btn => {
+      btn.onclick = async () => {
+        const style = btn.dataset.style;
+        const v = btn.dataset.v;
+        const id = document.getElementById('userId').value;
+        const headers = {};
+        switch (style) {
+          case 'vendor':       headers['Accept'] = `application/vnd.webapipoc.v${v}+json`; break;
+          case 'accept-param': headers['Accept'] = `application/json;version=${v}`; break;
+          case 'header':       headers['Accept'] = 'application/json'; headers['Api-Version'] = v; break;
+          case 'default':      /* no headers */ break;
+        }
+        const summary = Object.entries(headers).map(([k,v]) => `${k}: ${v}`).join(', ') || '(no hint)';
+        out(`GET /api/users/${id}  ${summary}`, 'info');
+        const res = await fetch('/api/users/' + id, { headers });
+        const body = await res.json();
+        const negotiation = res.headers.get('X-Negotiation');
+        const version = res.headers.get('X-Resolved-Version');
+        document.getElementById('response').textContent =
+          `# X-Resolved-Version: ${version}\n# X-Negotiation: ${negotiation}\n\n` +
+          JSON.stringify(body, null, 2);
+        out(`← ${res.status} resolved v${version} via ${negotiation}`, res.ok ? 'ok' : 'err');
+      };
+    });
+  </script>
+</body>
+</html>

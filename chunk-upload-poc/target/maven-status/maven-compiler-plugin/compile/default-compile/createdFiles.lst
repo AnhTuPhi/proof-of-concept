@@ -1,0 +1,11 @@
+com\poc\upload\model\UploadSession.class
+com\poc\upload\service\UploadSessionService.class
+com\poc\upload\service\FileStorageService.class
+com\poc\upload\UploadPocApplication.class
+com\poc\upload\model\StoredFile.class
+com\poc\upload\controller\UploadController$InitRequest.class
+com\poc\upload\controller\UploadController$InitResponse.class
+com\poc\upload\controller\DownloadController.class
+com\poc\upload\controller\UploadController$CompleteResponse.class
+com\poc\upload\controller\UploadController$StatusResponse.class
+com\poc\upload\controller\UploadController.class
