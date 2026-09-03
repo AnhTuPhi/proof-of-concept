@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>observability-poc — interactive walkthrough</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --accent2:#a371f7;
+    --trace:#f778ba; --metric:#3fb950; --log:#d29922; --err:#f85149;
+    --ok:#3fb950; --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    line-height:1.55;}
+  header{padding:28px 24px 18px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#12182150,#0d1117);}
+  header h1{margin:0;font-size:26px;letter-spacing:-.5px}
+  header h1 .dot{color:var(--trace)}
+  header p{margin:8px 0 0;color:var(--muted);max-width:820px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 24px 80px}
+  nav{display:flex;gap:4px;flex-wrap:wrap;margin:22px 0 26px;
+    border-bottom:1px solid var(--border)}
+  nav button{background:none;border:none;color:var(--muted);padding:11px 16px;
+    font-size:14px;cursor:pointer;border-bottom:2px solid transparent;font-weight:600}
+  nav button:hover{color:var(--txt)}
+  nav button.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab{display:none;animation:fade .25s ease}
+  .tab.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h2{font-size:20px;margin:6px 0 4px}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:18px;margin:14px 0}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .btn{background:var(--accent);color:#0d1117;border:none;border-radius:7px;
+    padding:10px 18px;font-weight:700;cursor:pointer;font-size:14px}
+  .btn:hover{filter:brightness(1.1)}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+  .btn.err{background:var(--err)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  code,.mono{font-family:var(--mono);font-size:13px}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;
+    font-weight:700;letter-spacing:.3px}
+  .pill.trace{background:#f778ba22;color:var(--trace);border:1px solid #f778ba55}
+  .pill.metric{background:#3fb95022;color:var(--metric);border:1px solid #3fb95055}
+  .pill.log{background:#d2992222;color:var(--log);border:1px solid #d2992255}
+
+  /* ---------- flow diagram ---------- */
+  .stage{position:relative;background:var(--panel2);border:1px solid var(--border);
+    border-radius:12px;padding:26px 18px;overflow:hidden}
+  .lane{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+  .node{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:12px 14px;min-width:120px;text-align:center;position:relative;
+    transition:box-shadow .2s,border-color .2s,transform .2s}
+  .node .nm{font-weight:700;font-size:13px}
+  .node .sub{font-size:11px;color:var(--muted);margin:2px 0 0}
+  .node.lit{border-color:var(--accent);box-shadow:0 0 0 2px #58a6ff44,0 0 22px #58a6ff33;
+    transform:translateY(-2px)}
+  .node.lit.err{border-color:var(--err);box-shadow:0 0 0 2px #f8514944,0 0 22px #f8514933}
+  .arrow{color:var(--muted);font-size:20px}
+  .col{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .backends{display:flex;gap:14px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+  .backends .node{min-width:110px}
+  .vgap{height:26px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .collector{background:linear-gradient(180deg,#1c2330,#161b22);
+    border:1px dashed var(--accent2);border-radius:12px;padding:12px 16px;
+    text-align:center;min-width:280px}
+  .collector .nm{font-weight:700;color:var(--accent2)}
+  .collector.lit{box-shadow:0 0 0 2px #a371f744,0 0 26px #a371f733}
+
+  /* travelling packet */
+  #packet{position:absolute;width:16px;height:16px;border-radius:50%;
+    background:var(--accent);box-shadow:0 0 14px var(--accent);opacity:0;
+    transition:left .5s ease,top .5s ease,opacity .2s;pointer-events:none;z-index:5}
+  #packet.trace{background:var(--trace);box-shadow:0 0 14px var(--trace)}
+  #packet.err{background:var(--err);box-shadow:0 0 14px var(--err)}
+
+  /* trace waterfall */
+  .wf{margin-top:8px}
+  .span{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:12px}
+  .span .lbl{width:190px;color:var(--muted);font-family:var(--mono);flex:none}
+  .span .bar{height:16px;border-radius:4px;background:var(--accent);position:relative;
+    min-width:2px;transition:width .5s ease}
+  .span.child .lbl{padding-left:18px}
+  .span.child2 .lbl{padding-left:36px}
+  .span .bar.pay{background:var(--accent2)}
+  .span .bar.inv{background:#2f81f7}
+  .span .bar.db{background:#1f6feb}
+  .span .bar.err{background:var(--err)}
+  .span .ms{font-size:11px;color:var(--muted)}
+
+  /* logs */
+  .console{background:#010409;border:1px solid var(--border);border-radius:8px;
+    padding:12px;font-family:var(--mono);font-size:12px;max-height:230px;overflow:auto}
+  .logline{white-space:pre-wrap;word-break:break-word;padding:2px 0;opacity:.95}
+  .logline .k{color:var(--muted)}
+  .logline .tid{color:var(--trace)}
+  .logline.info .lvl{color:var(--accent)}
+  .logline.warn .lvl{color:var(--log)}
+  .logline.error .lvl{color:var(--err)}
+  .logline .svc{color:var(--metric)}
+
+  /* metrics bars */
+  .metricrow{display:flex;align-items:center;gap:12px;margin:9px 0}
+  .metricrow .name{width:210px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .metricrow .track{flex:1;background:#010409;border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border)}
+  .metricrow .fill{height:100%;background:var(--metric);width:0;transition:width .5s}
+  .metricrow .fill.err{background:var(--err)}
+  .metricrow .val{width:70px;text-align:right;font-family:var(--mono);font-size:12px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--txt)}
+  td code{color:var(--accent)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0}
+  .legend span::before{content:"";display:inline-block;width:11px;height:11px;
+    border-radius:3px;margin-right:6px;vertical-align:middle}
+  .lg-trace::before{background:var(--trace)}
+  .lg-metric::before{background:var(--metric)}
+  .lg-log::before{background:var(--log)}
+  .status{font-size:13px;color:var(--muted);margin-left:8px}
+  ul.tight{margin:6px 0 0;padding-left:20px}
+  ul.tight li{margin:4px 0}
+  .callout{border-left:3px solid var(--accent2);background:#a371f712;padding:10px 14px;
+    border-radius:0 8px 8px 0;font-size:13px;margin:14px 0}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>observability&#8209;poc <span class="dot">●</span> interactive walkthrough</h1>
+  <p>One <code>trace_id</code>, stamped onto <b>traces</b>, <b>metrics</b>, and <b>logs</b>,
+     shipped over <b>one</b> protocol (OTLP) to a single Collector that fans out to the
+     backends. Click through to see how a single request becomes correlated evidence
+     across every service. <span class="mono" style="color:var(--muted)">— self-contained; no network needed.</span></p>
+</header>
+
+<div class="wrap">
+  <nav id="nav">
+    <button class="active" data-tab="flow">▶ Live flow</button>
+    <button data-tab="pillars">Three pillars</button>
+    <button data-tab="tech">Key tech by responsibility</button>
+    <button data-tab="scale">Scaling</button>
+  </nav>
+
+  <!-- ============ TAB: FLOW ============ -->
+  <section class="tab active" id="tab-flow">
+    <h2>Watch one request flow through the system</h2>
+    <p class="sub">Press <b>Place order</b> to send a request through <code>order-service</code>,
+      which fans out to payment + inventory in parallel, then emits three correlated signals.
+      Try the failing case to see an error trace light up.</p>
+
+    <div class="card">
+      <div class="row" style="align-items:center;margin-bottom:16px">
+        <button class="btn" id="run">▶ Place order (happy path)</button>
+        <button class="btn err" id="runFail">✕ Place order (payment declines)</button>
+        <span class="status" id="status">idle — click a button</span>
+      </div>
+
+      <div class="stage" id="stage">
+        <div id="packet"></div>
+        <div class="lane">
+          <div class="node" id="n-client"><div class="nm">client</div><div class="sub">POST /orders</div></div>
+          <span class="arrow">→</span>
+          <div class="node" id="n-order"><div class="nm">order-service</div><div class="sub">:3001 · fan-out</div></div>
+          <span class="arrow">→</span>
+          <div class="col">
+            <div class="node" id="n-pay"><div class="nm">payment-service</div><div class="sub">:3002 · /charge</div></div>
+            <div class="node" id="n-inv"><div class="nm">inventory-service</div><div class="sub">:3003 · /reserve</div></div>
+          </div>
+        </div>
+
+        <div class="vgap">▼ &nbsp; all services emit OTLP (traces · metrics · logs) &nbsp; ▼</div>
+
+        <div class="lane">
+          <div class="collector" id="n-coll">
+            <div class="nm">OpenTelemetry Collector</div>
+            <div class="sub">receive → memory_limiter → resource → batch → fan out</div>
+          </div>
+        </div>
+
+        <div class="backends">
+          <div class="node" id="n-jaeger"><div class="nm">Jaeger</div><div class="sub"><span class="pill trace">traces</span></div></div>
+          <div class="node" id="n-prom"><div class="nm">Prometheus</div><div class="sub"><span class="pill metric">metrics</span></div></div>
+          <div class="node" id="n-loki"><div class="nm">Loki</div><div class="sub"><span class="pill log">logs</span></div></div>
+        </div>
+        <div class="backends" style="margin-top:14px">
+          <div class="node" id="n-graf" style="min-width:200px"><div class="nm">Grafana</div><div class="sub">single pane · cross-links by trace_id</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2 style="font-size:16px">Trace <span class="pill trace">Jaeger</span></h2>
+        <p class="sub" style="margin-bottom:8px">trace_id <code id="tid-trace" class="tid">—</code></p>
+        <div class="wf" id="waterfall"><p class="sub">Run a request to build the span tree.</p></div>
+      </div>
+      <div class="card">
+        <h2 style="font-size:16px">Correlated logs <span class="pill log">Loki</span></h2>
+        <p class="sub" style="margin-bottom:8px">every line carries the same <span class="tid">trace_id</span></p>
+        <div class="console" id="logs"><span class="sub">Run a request to see structured logs.</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:16px">Metrics <span class="pill metric">Prometheus</span> <span class="sub">— aggregated across every request this session</span></h2>
+      <div class="metricrow"><div class="name">orders_created_total{confirmed}</div><div class="track"><div class="fill" id="m-conf"></div></div><div class="val" id="v-conf">0</div></div>
+      <div class="metricrow"><div class="name">orders_created_total{failed}</div><div class="track"><div class="fill err" id="m-fail"></div></div><div class="val" id="v-fail">0</div></div>
+      <div class="metricrow"><div class="name">payment_charges_total{success}</div><div class="track"><div class="fill" id="m-ps"></div></div><div class="val" id="v-ps">0</div></div>
+      <div class="metricrow"><div class="name">payment_charge_duration_ms (p95)</div><div class="track"><div class="fill" id="m-lat" style="background:var(--accent)"></div></div><div class="val" id="v-lat">0ms</div></div>
+      <div class="legend">
+        <span class="lg-trace">traces = where in the path</span>
+        <span class="lg-metric">metrics = is something wrong / how often</span>
+        <span class="lg-log">logs = the detailed narrative</span>
+      </div>
+    </div>
+    <div class="callout">The magic: the <code>trace_id</code> shown above is the <b>same</b> string in the
+      trace tree, in every log line, and (as an exemplar) on the metric. That single shared key is what
+      collapses three tools into one investigation.</div>
+  </section>
+
+  <!-- ============ TAB: PILLARS ============ -->
+  <section class="tab" id="tab-pillars">
+    <h2>The three pillars, and why one alone isn't enough</h2>
+    <p class="sub">Each answers a different question. Correlation by <code>trace_id</code> is what makes them a system instead of three silos.</p>
+    <div class="grid2">
+      <div class="card"><h2 style="font-size:16px"><span class="pill metric">Metrics</span> &nbsp;“Is something wrong?”</h2>
+        <p class="sub">Cheap, always-on, aggregatable numbers. Good for alerting and trends; can't tell you about one specific request.</p>
+        <ul class="tight">
+          <li>Counters: <code>orders_created_total</code>, <code>payment_charges_total</code></li>
+          <li>Histogram: <code>payment_charge_duration_ms</code></li>
+          <li>Pushed every 10s → Collector → scraped by Prometheus on :8889</li>
+          <li>Exemplars link a spike back to a real <code>trace_id</code></li>
+        </ul>
+      </div>
+      <div class="card"><h2 style="font-size:16px"><span class="pill trace">Traces</span> &nbsp;“Where in the path?”</h2>
+        <p class="sub">A tree of spans reassembled from every service by W3C Trace Context propagation.</p>
+        <ul class="tight">
+          <li>Auto spans for http/express; manual spans for business steps</li>
+          <li><code>traceparent</code> header carries context across processes</li>
+          <li>Parallel fan-out shows payment vs inventory side-by-side</li>
+          <li>Errors set <code>SpanStatusCode.ERROR</code> + record the exception</li>
+        </ul>
+      </div>
+      <div class="card"><h2 style="font-size:16px"><span class="pill log">Logs</span> &nbsp;“What exactly happened?”</h2>
+        <p class="sub">Richest detail, historically the hardest to correlate. Fixed by auto-injecting the trace context.</p>
+        <ul class="tight">
+          <li>Structured JSON via <code>pino</code></li>
+          <li><code>instrumentation-pino</code> stamps <code>trace_id</code>/<code>span_id</code> on every line</li>
+          <li>Shipped as OTLP log records → Loki (label-indexed, not full-text)</li>
+          <li>Grafana derived field turns <code>trace_id</code> into a link to the trace</li>
+        </ul>
+      </div>
+      <div class="card"><h2 style="font-size:16px">🔗 The join key</h2>
+        <p class="sub">Two things make correlation possible:</p>
+        <ul class="tight">
+          <li><b>trace_id</b> — per request, on all three signals</li>
+          <li><b>resource attributes</b> — <code>service.name</code>, <code>service.version</code>, <code>deployment.environment</code> on every signal</li>
+          <li>Grafana pivots trace → logs → metrics using these shared tags</li>
+        </ul>
+        <div class="callout" style="margin-bottom:0">Remove the shared <code>trace_id</code> and the “single pane of glass” degrades back into three browser tabs and manual timestamp-matching.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TAB: TECH ============ -->
+  <section class="tab" id="tab-tech">
+    <h2>Key tech by responsibility</h2>
+    <p class="sub">Each responsibility maps to exactly one piece of tech — the seam that lets any of them be swapped.</p>
+    <table>
+      <tr><th>Responsibility</th><th>Tech</th><th>Why it's here</th></tr>
+      <tr><td>Create &amp; propagate spans with no per-route code</td><td><code>auto-instrumentations-node</code></td><td>Zero-touch coverage of http/express; propagates W3C context automatically.</td></tr>
+      <tr><td>Business-meaningful spans &amp; attributes</td><td>OTel Trace API</td><td><code>order.process</code>, <code>payment.charge</code>, <code>inventory.stock_lookup</code>.</td></tr>
+      <tr><td>Define counters / histograms</td><td>OTel Metrics API</td><td>App owns what's measured; SDK owns how it's shipped.</td></tr>
+      <tr><td>Structured logs</td><td><code>pino</code></td><td>JSON, not free text — parseable and labelable.</td></tr>
+      <tr><td>Stamp trace_id onto logs</td><td><code>instrumentation-pino</code></td><td>Correlation without touching a single log call site.</td></tr>
+      <tr><td>One wire format out</td><td><b>OTLP</b> (gRPC/HTTP)</td><td>The single contract that decouples apps from backends.</td></tr>
+      <tr><td>Receive, protect, batch, tag, fan out</td><td><b>OTel Collector</b></td><td><code>memory_limiter → resource → batch</code>; one config owns all backend knowledge.</td></tr>
+      <tr><td>Store &amp; view traces</td><td>Jaeger</td><td>Swappable for Tempo — the Collector contract stays identical.</td></tr>
+      <tr><td>Store &amp; query metrics</td><td>Prometheus</td><td>Scrapes the Collector's :8889 exporter.</td></tr>
+      <tr><td>Store &amp; query logs</td><td>Loki 3.x</td><td>Native OTLP endpoint; label-indexed for cheap storage.</td></tr>
+      <tr><td>Single pane + cross-links</td><td>Grafana</td><td>trace↔logs↔metrics jumps via datasource-linked <code>trace_id</code>.</td></tr>
+    </table>
+    <div class="callout"><b>The decoupling seam.</b> Services know exactly one endpoint
+      (<code>OTEL_EXPORTER_OTLP_ENDPOINT</code>) and one protocol (OTLP). Swapping Jaeger→Tempo,
+      Loki→SaaS, or the whole stack for Honeycomb/Datadog is a change to <b>one file</b> (the
+      Collector config) or <b>one env var</b> — with zero application redeploys. Full detail in
+      <a href="TECHNICAL.md">TECHNICAL.md</a>.</div>
+  </section>
+
+  <!-- ============ TAB: SCALE ============ -->
+  <section class="tab" id="tab-scale">
+    <h2>What breaks when you run many replicas</h2>
+    <p class="sub">Full treatment in <a href="CONSISTENCY.md">CONSISTENCY.md</a>. The short version:</p>
+    <table>
+      <tr><th>Signal</th><th>Scales for free?</th><th>What you must do</th></tr>
+      <tr><td><span class="pill trace">Traces</span></td><td style="color:var(--ok)">✓ mostly</td>
+        <td>Self-describing per request — Jaeger stitches by ID regardless of which pod/collector. <b>Except tail-sampling:</b> needs a <code>loadbalancing</code> exporter keyed on <code>traceID</code> so all spans of a trace reach one collector.</td></tr>
+      <tr><td><span class="pill metric">Metrics</span></td><td style="color:var(--err)">✗ no</td>
+        <td>Counter resets on pod churn (use <code>rate()</code>); need Prometheus service discovery per collector pod; pick exactly one aggregation point; unique <code>service.instance.id</code> per replica.</td></tr>
+      <tr><td><span class="pill log">Logs</span></td><td style="color:var(--ok)">✓ mostly</td>
+        <td>Independent records, correlate by <code>trace_id</code>. Guard label cardinality (no <code>order_id</code> as a label); scaled Loki needs shared ring + object storage + <code>replication_factor ≥ 3</code>.</td></tr>
+      <tr><td>Collector</td><td>—</td>
+        <td>Split the one container into a stateless <b>agent</b> tier (DaemonSet / systemd per node) + a stateful <b>gateway</b> pool (tail-sampling, fan-out).</td></tr>
+    </table>
+    <div class="grid2" style="margin-top:16px">
+      <div class="card"><h2 style="font-size:16px">K8s (scale pods / HPA)</h2>
+        <ul class="tight">
+          <li>Agent = DaemonSet (one per node, free)</li>
+          <li>Discovery via <code>kubernetes_sd_configs</code></li>
+          <li><code>service.instance.id</code> = pod name/UID</li>
+          <li>Graceful drain via <code>preStop</code> + grace period</li>
+          <li>Pods churn constantly → counter resets are the norm</li>
+        </ul>
+      </div>
+      <div class="card"><h2 style="font-size:16px">VMs (scale instances / ASG)</h2>
+        <ul class="tight">
+          <li>Agent = collector as a <code>systemd</code> service on each VM image</li>
+          <li>Discovery wired to the ASG (DNS/Consul)</li>
+          <li><code>service.instance.id</code> must be injected (hostname/instance-id)</li>
+          <li>Graceful drain via ASG lifecycle hook + SIGTERM flush</li>
+          <li>Less churn, but still use <code>rate()</code></li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">Two things must be engineered deliberately either way: (1) <b>route a trace's
+      spans to one collector</b> so tail-sampling is correct, and (2) give every replica a stable unique
+      <b>service.instance.id</b> and aggregate metrics with <code>rate()</code>, so churn reads as churn — not corruption.</div>
+  </section>
+</div>
+
+<script>
+/* ---------- tab switching ---------- */
+document.querySelectorAll('#nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('tab-'+b.dataset.tab).classList.add('active');
+  };
+});
+
+/* ---------- flow demo ---------- */
+const stage=document.getElementById('stage');
+const packet=document.getElementById('packet');
+const status=document.getElementById('status');
+const runBtn=document.getElementById('run');
+const failBtn=document.getElementById('runFail');
+
+const nodes=['n-client','n-order','n-pay','n-inv','n-coll','n-jaeger','n-prom','n-loki','n-graf'];
+const clr=()=>nodes.forEach(id=>document.getElementById(id).classList.remove('lit','err'));
+const lit=(id,err)=>{const e=document.getElementById(id);e.classList.add('lit');if(err)e.classList.add('err');};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function hexId(n){let s='';const h='0123456789abcdef';for(let i=0;i<n;i++)s+=h[Math.random()*16|0];return s;}
+
+function movePacket(fromId,cls){
+  const s=stage.getBoundingClientRect();
+  const t=document.getElementById(fromId).getBoundingClientRect();
+  packet.className=''; if(cls)packet.classList.add(cls);
+  packet.style.left=(t.left-s.left+t.width/2-8)+'px';
+  packet.style.top=(t.top-s.top+t.height/2-8)+'px';
+  packet.style.opacity='1';
+}
+
+// session metric state
+const M={conf:0,fail:0,ps:0,lats:[]};
+function pct95(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);return s[Math.min(s.length-1,Math.floor(s.length*0.95))];}
+function renderMetrics(){
+  const cap=Math.max(1,M.conf+M.fail);
+  document.getElementById('m-conf').style.width=(M.conf/cap*100)+'%';
+  document.getElementById('m-fail').style.width=(M.fail/cap*100)+'%';
+  document.getElementById('m-ps').style.width=(M.ps/Math.max(1,M.ps+M.fail)*100)+'%';
+  const p=pct95(M.lats);
+  document.getElementById('m-lat').style.width=Math.min(100,p/300*100)+'%';
+  document.getElementById('v-conf').textContent=M.conf;
+  document.getElementById('v-fail').textContent=M.fail;
+  document.getElementById('v-ps').textContent=M.ps;
+  document.getElementById('v-lat').textContent=p+'ms';
+}
+
+function bar(cls,ms,maxMs){const w=Math.max(2,ms/maxMs*100);return `<div class="bar ${cls}" style="width:${w}%"></div>`;}
+
+function renderTrace(tid,d){
+  const max=d.total;
+  document.getElementById('tid-trace').textContent=tid;
+  const wf=document.getElementById('waterfall');
+  wf.innerHTML=`
+    <div class="span"><div class="lbl">order.process</div>${bar('',d.total,max)}<span class="ms">${d.total}ms</span></div>
+    <div class="span child"><div class="lbl">HTTP POST /reserve</div>${bar('inv',d.inv,max)}<span class="ms">${d.inv}ms</span></div>
+    <div class="span child2"><div class="lbl">inventory.stock_lookup</div>${bar('db',d.db,max)}<span class="ms">${d.db}ms</span></div>
+    <div class="span child"><div class="lbl">HTTP POST /charge</div>${bar(d.fail?'err':'pay',d.pay,max)}<span class="ms">${d.pay}ms${d.fail?' ✕':''}</span></div>
+    <div class="span child2"><div class="lbl">payment.charge</div>${bar(d.fail?'err':'pay',d.pay-8,max)}<span class="ms">${d.fail?'ERROR':'ok'}</span></div>`;
+}
+
+function logLine(lvl,svc,tid,msg,fields){
+  const f=Object.entries(fields).map(([k,v])=>`<span class="k">${k}</span>=${v}`).join(' ');
+  return `<div class="logline ${lvl}"><span class="lvl">${lvl.toUpperCase().padEnd(5)}</span> `+
+    `<span class="svc">${svc}</span> `+
+    `<span class="k">trace_id</span>=<span class="tid">${tid}</span> ${msg} ${f}</div>`;
+}
+
+async function run(fail){
+  runBtn.disabled=failBtn.disabled=true;
+  clr();
+  const tid=hexId(32);
+  const oid='ord_'+hexId(12);
+  // latencies
+  const db = Math.random()<0.15 ? 200+Math.random()*300|0 : 20+Math.random()*60|0;
+  const inv = db + (10+Math.random()*15|0);
+  const pay = 30+Math.random()*120|0;
+  const total = Math.max(inv,pay)+8;
+
+  status.textContent='① client → order-service  (root span created, trace_id '+tid.slice(0,8)+'…)';
+  movePacket('n-client','trace'); await sleep(120);
+  lit('n-client'); movePacket('n-order','trace'); await sleep(500); lit('n-order');
+
+  status.textContent='② order-service fans out to payment + inventory in parallel (traceparent header propagated)';
+  movePacket('n-pay','trace'); await sleep(200); lit('n-pay',fail);
+  movePacket('n-inv','trace'); await sleep(400); lit('n-inv');
+  await sleep(300);
+
+  status.textContent='③ all services emit OTLP → Collector (batch + memory_limiter + resource)';
+  movePacket('n-coll'); await sleep(500); lit('n-coll');
+  await sleep(300);
+
+  status.textContent='④ Collector fans out per signal type → Jaeger / Prometheus / Loki';
+  movePacket('n-jaeger','trace'); lit('n-jaeger'); await sleep(250);
+  movePacket('n-prom'); lit('n-prom'); await sleep(250);
+  movePacket('n-loki'); lit('n-loki'); await sleep(250);
+  movePacket('n-graf'); lit('n-graf'); await sleep(300);
+  packet.style.opacity='0';
+
+  // build outputs
+  renderTrace(tid,{total,inv,db,pay,fail});
+
+  const logs=document.getElementById('logs');
+  let out='';
+  out+=logLine('info','order-service',tid,'order received',{orderId:oid,sku:'WIDGET-1',qty:2});
+  out+=logLine('info','inventory-service',tid,'items reserved',{orderId:oid,sku:'WIDGET-1',reservationId:'rsv_'+hexId(12)});
+  if(fail){
+    out+=logLine('error','payment-service',tid,'charge declined by gateway',{orderId:oid,amount:4999,elapsed_ms:pay});
+    out+=logLine('error','order-service',tid,'order failed',{orderId:oid,err:'gateway declined'});
+    status.textContent='✕ done — payment declined. Notice the SAME trace_id ties the error across services.';
+  }else{
+    out+=logLine('info','payment-service',tid,'charge captured',{orderId:oid,amount:4999,chargeId:'ch_'+hexId(12)});
+    out+=logLine('info','order-service',tid,'order confirmed',{orderId:oid,status:'confirmed'});
+    status.textContent='✓ done — order confirmed. One trace_id spans all four services above.';
+  }
+  logs.innerHTML=out;
+
+  // metrics
+  if(fail){M.fail++;}else{M.conf++;M.ps++;}
+  M.lats.push(pay);
+  renderMetrics();
+
+  await sleep(400); clr();
+  runBtn.disabled=failBtn.disabled=false;
+}
+runBtn.onclick=()=>run(false);
+failBtn.onclick=()=>run(true);
+renderMetrics();
+</script>
+</body>
+</html>

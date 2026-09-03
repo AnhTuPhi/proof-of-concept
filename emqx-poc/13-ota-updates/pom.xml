@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.claude.emqx</groupId>
+        <artifactId>emqx-production-patterns-poc</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>poc-13-ota-updates</artifactId>
+    <name>POC 13 - OTA Firmware Updates</name>
+    <description>Chunked firmware delivery over MQTT with resumability, SHA-256 verification, and rollback.</description>
+
+    <dependencies>
+        <dependency><groupId>com.claude.emqx</groupId><artifactId>common</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>org.eclipse.paho</groupId><artifactId>org.eclipse.paho.mqttv5.client</artifactId></dependency>
+    </dependencies>
+    <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+</project>

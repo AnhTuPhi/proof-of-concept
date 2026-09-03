@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: kafka-streams-windowing-poc
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    streams:
+      auto-startup: true
+
+server:
+  port: 8109
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}

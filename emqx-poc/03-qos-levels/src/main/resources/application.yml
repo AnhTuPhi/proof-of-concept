@@ -1,0 +1,19 @@
+server:
+  port: 8103
+spring:
+  application.name: poc-03-qos-levels
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: qos-test
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 60
+  connection-timeout-seconds: 10
+  max-inflight: 100        # higher inflight = QoS 1/2 throughput closer to QoS 0
+  automatic-reconnect: false
+  tls:
+    enabled: false
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

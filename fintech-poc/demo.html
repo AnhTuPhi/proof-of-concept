@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fintech POC Suite — Interactive Demo</title>
+<style>
+  :root {
+    --bg: #0f1218;
+    --panel: #161b26;
+    --panel-2: #1c2231;
+    --border: #2a3244;
+    --text: #e4e8f1;
+    --muted: #8892a6;
+    --accent: #4dd0e1;
+    --accent-2: #7c4dff;
+    --success: #66bb6a;
+    --warn: #ffb74d;
+    --danger: #ef5350;
+    --code-bg: #0a0d13;
+    --mono: 'SF Mono', 'Consolas', 'Menlo', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  header {
+    padding: 32px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(124,77,255,0.08) 0%, transparent 100%);
+  }
+  header h1 {
+    margin: 0 0 6px;
+    font-size: 28px;
+    font-weight: 600;
+  }
+  header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  nav {
+    display: flex;
+    gap: 4px;
+    padding: 0 40px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  nav button {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 14px 18px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .15s, border-color .15s;
+  }
+  nav button:hover { color: var(--text); }
+  nav button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  main { padding: 32px 40px 60px; max-width: 1280px; }
+  section { display: none; }
+  section.active { display: block; }
+  h2 {
+    font-size: 22px;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--accent-2);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .flow {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #b0bec5;
+    white-space: pre;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .btn {
+    background: var(--accent);
+    color: #001;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 13px;
+    transition: opacity .15s, transform .1s;
+    margin: 4px 6px 4px 0;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:active { transform: translateY(1px); }
+  .btn.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .btn.danger { background: var(--danger); color: white; }
+  .btn.warn { background: var(--warn); color: #001; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 8px 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  td { font-family: var(--mono); font-size: 12.5px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge.success { background: rgba(102,187,106,0.2); color: var(--success); }
+  .badge.warn    { background: rgba(255,183,77,0.2); color: var(--warn); }
+  .badge.danger  { background: rgba(239,83,80,0.2); color: var(--danger); }
+  .badge.info    { background: rgba(77,208,225,0.2); color: var(--accent); }
+  .badge.muted   { background: rgba(136,146,166,0.15); color: var(--muted); }
+  .log {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    max-height: 240px;
+    overflow-y: auto;
+    margin-top: 12px;
+  }
+  .log div { margin: 2px 0; color: #b0bec5; }
+  .log .ok { color: var(--success); }
+  .log .warn { color: var(--warn); }
+  .log .err { color: var(--danger); }
+  .log .info { color: var(--accent); }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat:last-child { border: none; }
+  .stat .label { color: var(--muted); font-size: 13px; }
+  .stat .val {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .stat .val.big { font-size: 20px; color: var(--accent); }
+  input, select {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    margin: 4px;
+  }
+  label {
+    color: var(--muted);
+    font-size: 12px;
+    margin-right: 8px;
+  }
+  .tech-row {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+  .tech-row:last-child { border: none; }
+  .tech-row .tech {
+    flex: 0 0 180px;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .tech-row .desc { color: var(--muted); font-size: 13px; }
+  .kbd {
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    border: 1px solid var(--border);
+  }
+  .invariant {
+    background: rgba(124,77,255,0.08);
+    border-left: 3px solid var(--accent-2);
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .invariant strong { color: var(--accent-2); }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+  }
+  input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--panel-2);
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  .pill.active { background: var(--accent); color: #001; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Fintech POC Suite — Interactive Demo</h1>
+  <p>Five load-bearing patterns behind payment systems. Click through each tab to see the flow, invariants, and a live in-browser simulation of what the backend actually does.</p>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="idem">1. Idempotency</button>
+  <button class="tab-btn" data-tab="wallet">2. Wallet</button>
+  <button class="tab-btn" data-tab="recon">3. Reconciliation</button>
+  <button class="tab-btn" data-tab="refund">4. Refund</button>
+  <button class="tab-btn" data-tab="fx">5. Multi-currency</button>
+</nav>
+
+<main>
+
+<!-- =========== OVERVIEW =========== -->
+<section id="overview" class="active">
+  <h2>Overview</h2>
+  <p class="subtitle">The five invariants each POC defends, at a glance.</p>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>Meta-invariant</h3>
+      <div class="invariant">
+        <strong>Exactly-once financial effect under adversarial conditions.</strong>
+        Network failure, concurrency, provider disagreement, customer behavior, currency movement — the money and state must remain correct, and finance must be able to audit every cent.
+      </div>
+    </div>
+    <div class="panel">
+      <h3>The three primitives</h3>
+      <div class="tech-row"><div class="tech">UNIQUE constraint</div><div class="desc">First-writer-wins arbitration for idempotency, at any pod count.</div></div>
+      <div class="tech-row"><div class="tech">Row lock / conditional UPDATE</div><div class="desc">Enforce non-negative balances and no-lost-updates without a JVM lock.</div></div>
+      <div class="tech-row"><div class="tech">Append-only ledger</div><div class="desc">Truth = sum of immutable rows. Balance column is a cache to be reconciled.</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>The five POCs</h3>
+    <table>
+      <thead><tr><th>POC</th><th>Failure mode</th><th>Solution primitive</th><th>Port</th></tr></thead>
+      <tbody>
+        <tr><td>Idempotent payment</td><td>Retry double-charges</td><td>UNIQUE + fingerprint + replay</td><td>8081</td></tr>
+        <tr><td>Wallet concurrency</td><td>Negative balance under contention</td><td>Row lock / @Version / conditional UPDATE</td><td>8082</td></tr>
+        <tr><td>Reconciliation</td><td>Internal ≠ provider settlement</td><td>Categorized break log, idempotent re-run</td><td>8083</td></tr>
+        <tr><td>Refund flow</td><td>Refund > paid, expired card, coupon math</td><td>State machine + remaining refundable</td><td>8084</td></tr>
+        <tr><td>Multi-currency</td><td>Rate moves between pay and refund</td><td>Locked rate on payment + FX P&amp;L entry</td><td>8085</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h3>Read next</h3>
+    <p style="color: var(--muted); font-size: 13px;">
+      <strong>ISSUE.md</strong> — production failure modes each POC defends against.<br/>
+      <strong>TECHNICAL.md</strong> — solution shape, key tech by responsibility, tech debt.<br/>
+      <strong>CONSISTENCY.md</strong> — what breaks when you scale to K8s / multiple VMs.<br/>
+    </p>
+  </div>
+</section>
+
+<!-- =========== IDEMPOTENCY =========== -->
+<section id="idem">
+  <h2><span class="num">1</span> Idempotent payment</h2>
+  <p class="subtitle">The client retries because the network ate the response. We must not double-charge.</p>
+
+  <div class="invariant">
+    <strong>Invariant:</strong> For a given <span class="kbd">Idempotency-Key</span>, exactly one payment row is created and exactly one response is returned to every caller, forever.
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>The flow</h3>
+      <div class="flow">POST /payments
+Idempotency-Key: req-001
+Body: {amount, currency, customerId}
+    │
+    ▼
+fingerprint = SHA-256(canonical(body))
+    │
+    ▼
+INSERT INTO idempotency_record
+   (key, fingerprint, status='IN_FLIGHT')
+    │
+    ├── UNIQUE conflict? ──► read winner's row, replay response
+    │
+    ▼
+Execute charge → Payment row
+    │
+    ▼
+UPDATE idempotency_record
+   SET status='COMPLETED',
+       response_json=&lt;JSON&gt;
+    │
+    ▼
+Return response (replayed=false the first time, true after)</div>
+    </div>
+    <div class="panel">
+      <h3>Key tech by responsibility</h3>
+      <div class="tech-row">
+        <div class="tech">UNIQUE constraint</div>
+        <div class="desc">Arbitrates concurrent inserts. First writer wins; DB raises DataIntegrityViolation for the rest.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">SHA-256 fingerprint</div>
+        <div class="desc">Catches same-key-different-body tampering or client bugs. 409 conflict, no charge.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">REQUIRES_NEW propagation</div>
+        <div class="desc">Claim commits in its own transaction so the outer failure can't wipe the claim.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">Response replay</div>
+        <div class="desc">Stored JSON on the record; every retry gets byte-identical response with replayed=true.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Try it — hammer the same key from 20 concurrent clients</h3>
+    <p style="color: var(--muted); font-size: 13px;">Every "client" fires a POST with the same key. Watch how many payments get created versus how many replays happen.</p>
+    <div>
+      <label>Idempotency key:</label>
+      <input id="idem-key" value="req-001" style="width: 120px;" />
+      <label>Amount:</label>
+      <input id="idem-amount" value="100000" type="number" style="width: 100px;" />
+      <button class="btn" onclick="idemFire(1)">Send 1 request</button>
+      <button class="btn" onclick="idemFire(20)">Fire 20 concurrent</button>
+      <button class="btn danger" onclick="idemReset()">Reset store</button>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+      <div>
+        <h3 style="margin-top: 0;">Idempotency store</h3>
+        <table id="idem-store">
+          <thead><tr><th>Key</th><th>Status</th><th>Payment ID</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h3 style="margin-top: 20px;">Payments</h3>
+        <table id="idem-payments">
+          <thead><tr><th>Payment ID</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">Request log</h3>
+        <div id="idem-log" class="log"></div>
+        <div class="stat"><span class="label">Charges executed</span><span class="val" id="idem-charges">0</span></div>
+        <div class="stat"><span class="label">Replays served</span><span class="val" id="idem-replays">0</span></div>
+        <div class="stat"><span class="label">Conflicts (409)</span><span class="val" id="idem-conflicts">0</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========== WALLET =========== -->
+<section id="wallet">
+  <h2><span class="num">2</span> Wallet concurrency</h2>
+  <p class="subtitle">100k VND wallet. 150 concurrent 1k debits. Exactly 100 must succeed. Balance never negative.</p>
+
+  <div class="invariant">
+    <strong>Invariant:</strong> <span class="kbd">wallet.balance ≥ 0</span> under all interleavings. Successful debits = ledger entries. Ending balance = starting − Σ(successful debits).
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>The three strategies</h3>
+      <div class="tech-row">
+        <div class="tech">PESSIMISTIC</div>
+        <div class="desc"><span class="kbd">SELECT ... FOR UPDATE</span> — DB serializes waiters on the row. Simple, high contention friendly.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">OPTIMISTIC</div>
+        <div class="desc"><span class="kbd">@Version</span> — version check on save; retry with exp backoff on conflict. Best at low contention.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">CONDITIONAL_UPDATE</div>
+        <div class="desc"><span class="kbd">UPDATE ... WHERE balance ≥ :amt</span> — DB enforces invariant atomically. Lowest latency.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>The bug that all three prevent</h3>
+      <div class="flow">// NAIVE (broken)
+Wallet w = repo.findById(id);   // reads 100,000
+if (w.balance &gt;= amount) {      // check on stale value
+  w.debit(amount);              // in-memory 99,000
+  repo.save(w);                 // last writer wins
+}
+
+// Two threads read 100k concurrently,
+// both pass check, both write 99k.
+// Ledger gets two entries. Balance still 99k.
+// LOST UPDATE.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Try it — simulate concurrent debits</h3>
+    <div>
+      <label>Strategy:</label>
+      <select id="wallet-strategy">
+        <option value="NAIVE">NAIVE (broken, for comparison)</option>
+        <option value="PESSIMISTIC">PESSIMISTIC</option>
+        <option value="OPTIMISTIC">OPTIMISTIC</option>
+        <option value="CONDITIONAL_UPDATE" selected>CONDITIONAL_UPDATE</option>
+      </select>
+      <label>Concurrent debits:</label>
+      <input id="wallet-count" type="number" value="150" style="width: 80px;" />
+      <label>Amount each:</label>
+      <input id="wallet-amount" type="number" value="1000" style="width: 80px;" />
+      <button class="btn" onclick="walletRun()">Run</button>
+      <button class="btn danger" onclick="walletReset()">Reset wallet</button>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+      <div class="panel" style="border: 1px solid var(--border);">
+        <h3>Wallet state</h3>
+        <div class="stat"><span class="label">Balance</span><span class="val big" id="wallet-balance">100,000</span></div>
+        <div class="stat"><span class="label">Version</span><span class="val" id="wallet-version">0</span></div>
+        <div class="stat"><span class="label">Successful debits</span><span class="val" id="wallet-success">0</span></div>
+        <div class="stat"><span class="label">Rejected (insufficient)</span><span class="val" id="wallet-rejected">0</span></div>
+        <div class="stat"><span class="label">Retried (optimistic conflict)</span><span class="val" id="wallet-retried">0</span></div>
+        <div class="stat"><span class="label">Ledger entries</span><span class="val" id="wallet-ledger-count">0</span></div>
+        <div class="stat"><span class="label" style="font-weight:600;">Invariant: balance ≥ 0</span><span class="val" id="wallet-check">OK</span></div>
+      </div>
+      <div>
+        <h3>Ledger (append-only)</h3>
+        <div class="log" id="wallet-log"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =========== RECONCILIATION =========== -->
+<section id="recon">
+  <h2><span class="num">3</span> Reconciliation</h2>
+  <p class="subtitle">Daily job: join internal ledger against provider settlement report. Four break categories.</p>
+
+  <div class="invariant">
+    <strong>Invariant:</strong> Every settled transaction is either matched to an internal record or booked as a specific break type. Re-runs never re-break already-matched rows.
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>Break types</h3>
+      <table>
+        <thead><tr><th>Type</th><th>Meaning</th><th>Owner</th></tr></thead>
+        <tbody>
+          <tr><td>MISSING_AT_PROVIDER</td><td>We shipped, they didn't settle</td><td>Ops</td></tr>
+          <tr><td>MISSING_AT_INTERNAL</td><td>They settled, we have no record</td><td>Engineering</td></tr>
+          <tr><td>AMOUNT_MISMATCH</td><td>Same ref, different amount</td><td>Finance</td></tr>
+          <tr><td>CURRENCY_MISMATCH</td><td>Wrong ccy settled</td><td>Provider config</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Match algorithm</h3>
+      <div class="flow">for each internal txn (matched=false):
+    provider = lookup by providerRef
+    if provider is null → MISSING_AT_PROVIDER
+    elif currency differs → CURRENCY_MISMATCH
+    elif amount differs → AMOUNT_MISMATCH
+    elif |occurredAt - settledAt| &gt; 48h → break
+    else: mark BOTH matched=true
+
+for each provider txn (matched=false):
+    if no internal with that providerRef →
+        MISSING_AT_INTERNAL</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Try it — edit the two streams and run recon</h3>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+      <button class="btn" onclick="reconRun()">Run reconciliation</button>
+      <button class="btn secondary" onclick="reconSeedDemo()">Seed demo data (2 clean + 4 break types)</button>
+      <button class="btn danger" onclick="reconReset()">Reset</button>
+    </div>
+    <div class="grid" style="margin-top: 16px;">
+      <div>
+        <h3>Internal ledger</h3>
+        <table id="recon-internal">
+          <thead><tr><th>ID</th><th>ProviderRef</th><th>Amount</th><th>Ccy</th><th>Matched</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div>
+        <h3>Provider settlement report</h3>
+        <table id="recon-provider">
+          <thead><tr><th>ID</th><th>ProviderRef</th><th>Amount</th><th>Ccy</th><th>Matched</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <h3 style="margin-top: 20px;">Breaks (open)</h3>
+    <table id="recon-breaks">
+      <thead><tr><th>Type</th><th>Internal</th><th>Provider</th><th>Reason</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="stat"><span class="label">Matched this run</span><span class="val" id="recon-matched">0</span></div>
+    <div class="stat"><span class="label">New breaks this run</span><span class="val" id="recon-newbreaks">0</span></div>
+  </div>
+</section>
+
+<!-- =========== REFUND =========== -->
+<section id="refund">
+  <h2><span class="num">4</span> Refund flow</h2>
+  <p class="subtitle">Refund the actual paid amount, not the face value. Fall back cleanly when the card is gone. Cap at remaining refundable.</p>
+
+  <div class="invariant">
+    <strong>Invariant:</strong> <span class="kbd">Σ refunds ≤ paid</span>. Refund amount computed from <span class="kbd">paidAmount</span> (net of coupon), not <span class="kbd">faceValue</span>. State transitions one-way and validated.
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>Channel selection (fallback logic)</h3>
+      <table>
+        <thead><tr><th>Original method</th><th>Fallback channel</th></tr></thead>
+        <tbody>
+          <tr><td>ACTIVE</td><td>ORIGINAL_CARD</td></tr>
+          <tr><td>EXPIRED</td><td>BANK_TRANSFER</td></tr>
+          <tr><td>REMOVED</td><td>STORE_CREDIT</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h3>Reject rules</h3>
+      <ul style="color: var(--muted); font-size: 13px; margin: 0; padding-left: 18px;">
+        <li>Older than 180 days → refund window expired</li>
+        <li>Requested &gt; remaining refundable → over-refund</li>
+        <li>Illegal state transition → throw</li>
+        <li>Same idempotency key → replay same refund (no new payout)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Try it — configure a payment and request refunds</h3>
+    <div>
+      <label>Face value:</label>
+      <input id="ref-face" type="number" value="500000" style="width: 100px;" />
+      <label>Coupon:</label>
+      <input id="ref-coupon" type="number" value="100000" style="width: 100px;" />
+      <label>Method status:</label>
+      <select id="ref-method">
+        <option value="ACTIVE" selected>ACTIVE (card OK)</option>
+        <option value="EXPIRED">EXPIRED</option>
+        <option value="REMOVED">REMOVED</option>
+      </select>
+      <label>Age (days):</label>
+      <input id="ref-age" type="number" value="30" style="width: 60px;" />
+      <button class="btn" onclick="refundSetup()">Create payment</button>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+      <div>
+        <h3 style="margin-top: 0;">Payment state</h3>
+        <div class="stat"><span class="label">Face value</span><span class="val" id="ref-p-face">—</span></div>
+        <div class="stat"><span class="label">Paid (after coupon)</span><span class="val big" id="ref-p-paid">—</span></div>
+        <div class="stat"><span class="label">Refunded so far</span><span class="val" id="ref-p-refunded">—</span></div>
+        <div class="stat"><span class="label">Remaining refundable</span><span class="val" id="ref-p-remaining">—</span></div>
+        <div class="stat"><span class="label">Age</span><span class="val" id="ref-p-age">—</span></div>
+        <div class="stat"><span class="label">Method</span><span class="val" id="ref-p-method">—</span></div>
+      </div>
+      <div>
+        <h3 style="margin-top: 0;">Request refund</h3>
+        <label>Idempotency key:</label>
+        <input id="ref-key" value="rfd-1" style="width: 100px;" />
+        <br>
+        <label>Amount (0 = full):</label>
+        <input id="ref-amount" type="number" value="0" style="width: 120px;" />
+        <br>
+        <button class="btn" onclick="refundDo()">Refund</button>
+        <div class="log" id="ref-log" style="margin-top: 12px;"></div>
+      </div>
+    </div>
+    <h3 style="margin-top: 16px;">Refund history</h3>
+    <table id="ref-history">
+      <thead><tr><th>Key</th><th>Amount</th><th>Channel</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- =========== MULTI-CURRENCY =========== -->
+<section id="fx">
+  <h2><span class="num">5</span> Multi-currency</h2>
+  <p class="subtitle">Customer sees USD, pays VND, refunds in USD at the original locked rate. FX P&amp;L isolated.</p>
+
+  <div class="invariant">
+    <strong>Invariant:</strong> Refund in original presentment currency at original locked rate. FX delta between locked and current market rate is booked to a dedicated P&amp;L account, never mixed into the transaction.
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h3>Three moving parts</h3>
+      <div class="tech-row">
+        <div class="tech">Quote (TTL 15m)</div>
+        <div class="desc">Rate = market × (1 − margin). Expires at absolute timestamp; expired = reject.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">Payment</div>
+        <div class="desc">Stores <span class="kbd">lockedRate</span> on the row. Book margin delta to <span class="kbd">FxPnlEntry(MARGIN)</span>.</div>
+      </div>
+      <div class="tech-row">
+        <div class="tech">Refund</div>
+        <div class="desc">Settlement = presentment × <em>original locked rate</em>. Delta vs current rate → <span class="kbd">FxPnlEntry(FX_DELTA_REFUND)</span>.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Ledger picture</h3>
+      <div class="flow">quote:    1 USD → 24,000 VND (locked)
+pay:      $10 → ₫240,000    settle
+          margin ₫1,200      → FxPnlEntry(MARGIN)
+
+--- 30 days later, market moves ---
+market:   1 USD → 26,000 VND
+
+refund:   $10 (customer receives USD)
+          settle at LOCKED  → ₫240,000 (our cost, at market: ₫260,000)
+          delta ₫20,000     → FxPnlEntry(FX_DELTA_REFUND)</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Try it — quote, pay, then move the market</h3>
+    <div class="slider-row">
+      <label>Market rate (VND per USD):</label>
+      <input id="fx-rate" type="range" min="20000" max="30000" step="100" value="24000" oninput="fxRateChange()" />
+      <span class="val" id="fx-rate-val" style="font-family: var(--mono); color: var(--accent); font-weight: 600;">24,000</span>
+    </div>
+    <div>
+      <label>Margin:</label>
+      <input id="fx-margin" type="number" value="0.5" step="0.1" style="width: 70px;" />%
+      <button class="btn" onclick="fxQuote()">1. Get quote</button>
+      <label>Presentment (USD):</label>
+      <input id="fx-amount" type="number" value="10" style="width: 70px;" />
+      <button class="btn" onclick="fxPay()">2. Pay</button>
+      <label>Refund (USD):</label>
+      <input id="fx-refund" type="number" value="10" style="width: 70px;" />
+      <button class="btn" onclick="fxRefund()">3. Refund</button>
+      <button class="btn danger" onclick="fxReset()">Reset</button>
+    </div>
+
+    <div class="grid" style="margin-top: 16px;">
+      <div>
+        <h3>Current quote</h3>
+        <div class="stat"><span class="label">Rate (with margin)</span><span class="val" id="fx-q-rate">—</span></div>
+        <div class="stat"><span class="label">Expires in</span><span class="val" id="fx-q-ttl">—</span></div>
+        <h3 style="margin-top: 16px;">Payment</h3>
+        <div class="stat"><span class="label">Presentment</span><span class="val" id="fx-p-pres">—</span></div>
+        <div class="stat"><span class="label">Settlement</span><span class="val" id="fx-p-sett">—</span></div>
+        <div class="stat"><span class="label">Locked rate</span><span class="val" id="fx-p-locked">—</span></div>
+      </div>
+      <div>
+        <h3>FX P&amp;L ledger</h3>
+        <table id="fx-pnl">
+          <thead><tr><th>Kind</th><th>Ccy</th><th>Amount</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="stat" style="margin-top: 12px;"><span class="label">Net FX P&amp;L (VND)</span><span class="val big" id="fx-net">0</span></div>
+        <div class="log" id="fx-log" style="margin-top: 12px;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+// ==================== Tab switching ====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+const fmt = n => n.toLocaleString('en-US');
+function log(el, msg, cls) {
+  const d = document.createElement('div');
+  d.textContent = msg;
+  if (cls) d.className = cls;
+  el.prepend(d);
+}
+
+// ==================== IDEMPOTENCY DEMO ====================
+const idem = { records: new Map(), payments: [], charges: 0, replays: 0, conflicts: 0 };
+function idemFire(n) {
+  const key = document.getElementById('idem-key').value;
+  const amount = parseInt(document.getElementById('idem-amount').value);
+  const fp = 'fp-' + amount; // simplified fingerprint
+
+  // Simulate N concurrent requests. All see "no record" then race on insert.
+  const initiallyExists = idem.records.has(key);
+  const winners = initiallyExists ? [] : [0];
+  for (let i = 0; i < n; i++) {
+    if (i === 0 && !initiallyExists) {
+      // First one wins the insert
+      const paymentId = 'pay-' + (idem.payments.length + 1);
+      idem.records.set(key, { key, fingerprint: fp, status: 'COMPLETED', paymentId, response: { amount } });
+      idem.payments.push({ id: paymentId, amount, status: 'CAPTURED' });
+      idem.charges++;
+      log(document.getElementById('idem-log'), `[client ${i+1}] WINNER — charged ${fmt(amount)}, payment=${paymentId}`, 'ok');
+    } else {
+      const existing = idem.records.get(key);
+      if (existing.fingerprint !== fp) {
+        idem.conflicts++;
+        log(document.getElementById('idem-log'), `[client ${i+1}] 409 — key reused with different body`, 'err');
+      } else {
+        idem.replays++;
+        log(document.getElementById('idem-log'), `[client ${i+1}] replay — payment=${existing.paymentId}`, 'info');
+      }
+    }
+  }
+  idemRender();
+}
+function idemReset() {
+  idem.records.clear(); idem.payments = []; idem.charges = 0; idem.replays = 0; idem.conflicts = 0;
+  document.getElementById('idem-log').innerHTML = '';
+  idemRender();
+}
+function idemRender() {
+  const sb = document.querySelector('#idem-store tbody');
+  sb.innerHTML = '';
+  idem.records.forEach(r => {
+    sb.innerHTML += `<tr><td>${r.key}</td><td><span class="badge success">${r.status}</span></td><td>${r.paymentId}</td></tr>`;
+  });
+  const pb = document.querySelector('#idem-payments tbody');
+  pb.innerHTML = '';
+  idem.payments.forEach(p => {
+    pb.innerHTML += `<tr><td>${p.id}</td><td>${fmt(p.amount)}</td><td><span class="badge success">${p.status}</span></td></tr>`;
+  });
+  document.getElementById('idem-charges').textContent = idem.charges;
+  document.getElementById('idem-replays').textContent = idem.replays;
+  document.getElementById('idem-conflicts').textContent = idem.conflicts;
+}
+idemRender();
+
+// ==================== WALLET DEMO ====================
+const wallet = { balance: 100000, version: 0, ledger: [], success: 0, rejected: 0, retried: 0 };
+function walletReset() {
+  wallet.balance = 100000; wallet.version = 0; wallet.ledger = [];
+  wallet.success = 0; wallet.rejected = 0; wallet.retried = 0;
+  document.getElementById('wallet-log').innerHTML = '';
+  walletRender();
+}
+function walletRun() {
+  const strat = document.getElementById('wallet-strategy').value;
+  const count = parseInt(document.getElementById('wallet-count').value);
+  const amt = parseInt(document.getElementById('wallet-amount').value);
+  walletReset();
+
+  if (strat === 'NAIVE') {
+    // Simulate lost updates: many threads read the SAME initial value in parallel
+    const initial = wallet.balance;
+    let allowed = 0;
+    for (let i = 0; i < count; i++) {
+      // Every thread reads the same "initial" snapshot (worst case)
+      if (initial >= amt) {
+        // All pass the check, all write. Last writer wins, but the ledger records all "successes"
+        allowed++;
+      }
+    }
+    // Naive: N threads all wrote balance = initial - amt. Ledger got N entries.
+    wallet.balance = Math.max(0, initial - amt); // last writer wins with (initial - amt)
+    wallet.success = allowed;
+    for (let i = 0; i < allowed; i++) {
+      wallet.ledger.push({ id: i+1, type: 'DEBIT', amount: amt, balanceAfter: wallet.balance, strategy: strat });
+    }
+    log(document.getElementById('wallet-log'),
+      `[NAIVE] ${allowed} "successful" debits but balance only reflects ONE — the classic lost-update bug`, 'err');
+  } else if (strat === 'PESSIMISTIC') {
+    // DB serializes; process in order.
+    for (let i = 0; i < count; i++) {
+      if (wallet.balance >= amt) {
+        wallet.balance -= amt;
+        wallet.success++;
+        wallet.ledger.push({ id: wallet.success, type: 'DEBIT', amount: amt, balanceAfter: wallet.balance, strategy: strat });
+      } else {
+        wallet.rejected++;
+      }
+    }
+    log(document.getElementById('wallet-log'), `[PESSIMISTIC] Row-locked and serialized: ${wallet.success} success, ${wallet.rejected} rejected`, 'ok');
+  } else if (strat === 'OPTIMISTIC') {
+    // Simulate contention: retries happen
+    for (let i = 0; i < count; i++) {
+      let attempts = 0;
+      while (attempts < 64) {
+        if (wallet.balance >= amt) {
+          wallet.balance -= amt;
+          wallet.version++;
+          wallet.success++;
+          wallet.ledger.push({ id: wallet.success, type: 'DEBIT', amount: amt, balanceAfter: wallet.balance, strategy: strat });
+          break;
+        } else {
+          wallet.rejected++;
+          break;
+        }
+        attempts++;
+      }
+      // Simulate some optimistic retries under contention
+      if (i > 0 && i % 3 === 0) wallet.retried++;
+    }
+    log(document.getElementById('wallet-log'), `[OPTIMISTIC] ${wallet.success} success, ${wallet.rejected} rejected, ${wallet.retried} retries`, 'ok');
+  } else if (strat === 'CONDITIONAL_UPDATE') {
+    for (let i = 0; i < count; i++) {
+      // UPDATE ... WHERE balance >= amt
+      if (wallet.balance >= amt) {
+        wallet.balance -= amt;
+        wallet.success++;
+        wallet.ledger.push({ id: wallet.success, type: 'DEBIT', amount: amt, balanceAfter: wallet.balance, strategy: strat });
+      } else {
+        wallet.rejected++;
+      }
+    }
+    log(document.getElementById('wallet-log'), `[CONDITIONAL_UPDATE] Atomic: ${wallet.success} success, ${wallet.rejected} rejected — one round-trip each`, 'ok');
+  }
+  walletRender();
+}
+function walletRender() {
+  document.getElementById('wallet-balance').textContent = fmt(wallet.balance);
+  document.getElementById('wallet-version').textContent = wallet.version;
+  document.getElementById('wallet-success').textContent = wallet.success;
+  document.getElementById('wallet-rejected').textContent = wallet.rejected;
+  document.getElementById('wallet-retried').textContent = wallet.retried;
+  document.getElementById('wallet-ledger-count').textContent = wallet.ledger.length;
+  const check = document.getElementById('wallet-check');
+  if (wallet.balance < 0) {
+    check.innerHTML = '<span class="badge danger">VIOLATED</span>';
+  } else {
+    // Also check ledger consistency vs balance
+    const drift = wallet.ledger.reduce((s, e) => s + e.amount, 0);
+    const expected = 100000 - drift;
+    if (expected !== wallet.balance) {
+      check.innerHTML = '<span class="badge danger">DRIFT — ledger says ' + fmt(expected) + '</span>';
+    } else {
+      check.innerHTML = '<span class="badge success">OK</span>';
+    }
+  }
+  const lg = document.getElementById('wallet-log');
+  // append recent ledger entries
+  const recent = wallet.ledger.slice(-5);
+  recent.forEach(e => {
+    // don't duplicate — just show
+  });
+}
+walletRender();
+
+// ==================== RECONCILIATION DEMO ====================
+const recon = { internal: [], provider: [], breaks: [], matchedThisRun: 0, newBreaksThisRun: 0 };
+function reconReset() {
+  recon.internal = []; recon.provider = []; recon.breaks = [];
+  recon.matchedThisRun = 0; recon.newBreaksThisRun = 0;
+  reconRender();
+}
+function reconSeedDemo() {
+  reconReset();
+  const now = Date.now();
+  // 2 clean matches
+  recon.internal.push({ id: 'i1', providerRef: 'PR-1', amount: 100000, currency: 'VND', matched: false, ts: now });
+  recon.provider.push({ id: 'p1', providerRef: 'PR-1', amount: 100000, currency: 'VND', matched: false, ts: now });
+  recon.internal.push({ id: 'i2', providerRef: 'PR-2', amount: 250000, currency: 'VND', matched: false, ts: now });
+  recon.provider.push({ id: 'p2', providerRef: 'PR-2', amount: 250000, currency: 'VND', matched: false, ts: now });
+  // MISSING_AT_PROVIDER
+  recon.internal.push({ id: 'i3', providerRef: 'PR-3', amount: 50000, currency: 'VND', matched: false, ts: now });
+  // MISSING_AT_INTERNAL
+  recon.provider.push({ id: 'p4', providerRef: 'PR-4', amount: 75000, currency: 'VND', matched: false, ts: now });
+  // AMOUNT_MISMATCH
+  recon.internal.push({ id: 'i5', providerRef: 'PR-5', amount: 100000, currency: 'VND', matched: false, ts: now });
+  recon.provider.push({ id: 'p5', providerRef: 'PR-5', amount: 99500, currency: 'VND', matched: false, ts: now });
+  // CURRENCY_MISMATCH
+  recon.internal.push({ id: 'i6', providerRef: 'PR-6', amount: 100, currency: 'USD', matched: false, ts: now });
+  recon.provider.push({ id: 'p6', providerRef: 'PR-6', amount: 100, currency: 'VND', matched: false, ts: now });
+  reconRender();
+}
+function reconRun() {
+  recon.matchedThisRun = 0; recon.newBreaksThisRun = 0;
+  for (const it of recon.internal.filter(x => !x.matched)) {
+    const pt = recon.provider.find(p => p.providerRef === it.providerRef);
+    if (!pt) {
+      recon.breaks.push({ type: 'MISSING_AT_PROVIDER', internal: it.id, provider: '—', reason: 'Internal ' + it.id + ' has no provider settlement' });
+      recon.newBreaksThisRun++; continue;
+    }
+    if (it.currency !== pt.currency) {
+      recon.breaks.push({ type: 'CURRENCY_MISMATCH', internal: it.id, provider: pt.id, reason: 'internal=' + it.currency + ' provider=' + pt.currency });
+      recon.newBreaksThisRun++; continue;
+    }
+    if (it.amount !== pt.amount) {
+      recon.breaks.push({ type: 'AMOUNT_MISMATCH', internal: it.id, provider: pt.id, reason: 'diff=' + Math.abs(it.amount - pt.amount) + ' ' + it.currency });
+      recon.newBreaksThisRun++; continue;
+    }
+    it.matched = true; pt.matched = true;
+    recon.matchedThisRun++;
+  }
+  for (const pt of recon.provider.filter(x => !x.matched)) {
+    if (!recon.internal.find(i => i.providerRef === pt.providerRef)) {
+      recon.breaks.push({ type: 'MISSING_AT_INTERNAL', internal: '—', provider: pt.id, reason: 'Provider ' + pt.id + ' has no internal record' });
+      recon.newBreaksThisRun++;
+    }
+  }
+  reconRender();
+}
+function reconRender() {
+  const rb = t => `<span class="badge ${t==='MISSING_AT_PROVIDER'?'warn':t==='MISSING_AT_INTERNAL'?'danger':t==='AMOUNT_MISMATCH'?'info':'warn'}">${t}</span>`;
+  const ib = document.querySelector('#recon-internal tbody');
+  ib.innerHTML = recon.internal.map(x => `<tr><td>${x.id}</td><td>${x.providerRef}</td><td>${fmt(x.amount)}</td><td>${x.currency}</td><td>${x.matched ? '<span class="badge success">✓</span>' : '<span class="badge muted">—</span>'}</td></tr>`).join('');
+  const pb = document.querySelector('#recon-provider tbody');
+  pb.innerHTML = recon.provider.map(x => `<tr><td>${x.id}</td><td>${x.providerRef}</td><td>${fmt(x.amount)}</td><td>${x.currency}</td><td>${x.matched ? '<span class="badge success">✓</span>' : '<span class="badge muted">—</span>'}</td></tr>`).join('');
+  const bb = document.querySelector('#recon-breaks tbody');
+  bb.innerHTML = recon.breaks.map(b => `<tr><td>${rb(b.type)}</td><td>${b.internal}</td><td>${b.provider}</td><td>${b.reason}</td></tr>`).join('');
+  document.getElementById('recon-matched').textContent = recon.matchedThisRun;
+  document.getElementById('recon-newbreaks').textContent = recon.newBreaksThisRun;
+}
+reconSeedDemo();
+
+// ==================== REFUND DEMO ====================
+const refund = { payment: null, refunds: [] };
+function refundSetup() {
+  const face = parseInt(document.getElementById('ref-face').value);
+  const coupon = parseInt(document.getElementById('ref-coupon').value);
+  const method = document.getElementById('ref-method').value;
+  const age = parseInt(document.getElementById('ref-age').value);
+  refund.payment = {
+    id: 'pay-1', faceValue: face, coupon, paidAmount: face - coupon,
+    refundedAmount: 0, methodStatus: method, ageDays: age
+  };
+  refund.refunds = [];
+  document.getElementById('ref-log').innerHTML = '';
+  refundRender();
+  log(document.getElementById('ref-log'),
+    `Payment created: face=${fmt(face)}, coupon=${fmt(coupon)}, paid=${fmt(face - coupon)}, method=${method}, age=${age}d`, 'info');
+}
+function refundDo() {
+  const p = refund.payment;
+  if (!p) { log(document.getElementById('ref-log'), 'No payment — click "Create payment" first', 'err'); return; }
+  const key = document.getElementById('ref-key').value;
+  const requested = parseInt(document.getElementById('ref-amount').value);
+
+  // Idempotency check
+  const existing = refund.refunds.find(r => r.key === key);
+  if (existing) {
+    log(document.getElementById('ref-log'), `[replay] key=${key} → refund ${existing.id} (${fmt(existing.amount)}), no payout`, 'info');
+    return;
+  }
+  // Refund window
+  if (p.ageDays > 180) {
+    log(document.getElementById('ref-log'), `[reject] refund window expired (${p.ageDays}d > 180d)`, 'err');
+    return;
+  }
+  const remaining = p.paidAmount - p.refundedAmount;
+  const amount = requested === 0 ? remaining : requested;
+  if (amount > remaining) {
+    log(document.getElementById('ref-log'), `[reject] requested ${fmt(amount)} > remaining refundable ${fmt(remaining)}`, 'err');
+    return;
+  }
+  // Channel pick
+  const channel = p.methodStatus === 'ACTIVE' ? 'ORIGINAL_CARD'
+                : p.methodStatus === 'EXPIRED' ? 'BANK_TRANSFER' : 'STORE_CREDIT';
+  const r = { id: 'rfd-' + (refund.refunds.length + 1), key, amount, channel, status: 'SETTLED' };
+  refund.refunds.push(r);
+  p.refundedAmount += amount;
+  log(document.getElementById('ref-log'),
+    `[SETTLED] refund ${r.id}: ${fmt(amount)} via ${channel}. Remaining refundable: ${fmt(p.paidAmount - p.refundedAmount)}`, 'ok');
+  refundRender();
+}
+function refundRender() {
+  const p = refund.payment;
+  const $ = id => document.getElementById(id);
+  if (!p) return;
+  $('ref-p-face').textContent = fmt(p.faceValue);
+  $('ref-p-paid').textContent = fmt(p.paidAmount);
+  $('ref-p-refunded').textContent = fmt(p.refundedAmount);
+  $('ref-p-remaining').textContent = fmt(p.paidAmount - p.refundedAmount);
+  $('ref-p-age').textContent = p.ageDays + 'd' + (p.ageDays > 180 ? ' ⚠️ expired' : '');
+  $('ref-p-method').textContent = p.methodStatus;
+  const rb = document.querySelector('#ref-history tbody');
+  rb.innerHTML = refund.refunds.map(r => `<tr><td>${r.key}</td><td>${fmt(r.amount)}</td><td>${r.channel}</td><td><span class="badge success">${r.status}</span></td></tr>`).join('');
+}
+refundSetup();
+
+// ==================== FX DEMO ====================
+const fx = { marketRate: 24000, margin: 0.005, quote: null, payment: null, pnl: [], quoteTimer: null };
+function fxRateChange() {
+  fx.marketRate = parseInt(document.getElementById('fx-rate').value);
+  document.getElementById('fx-rate-val').textContent = fmt(fx.marketRate);
+}
+function fxReset() {
+  fx.quote = null; fx.payment = null; fx.pnl = [];
+  document.getElementById('fx-log').innerHTML = '';
+  if (fx.quoteTimer) { clearInterval(fx.quoteTimer); fx.quoteTimer = null; }
+  fxRender();
+}
+function fxQuote() {
+  fx.margin = parseFloat(document.getElementById('fx-margin').value) / 100;
+  const withMargin = fx.marketRate * (1 - fx.margin);
+  const ttl = 30; // shorter demo TTL: 30s
+  fx.quote = { id: 'q-' + Date.now(), rate: withMargin, marketRateAtQuote: fx.marketRate, ttl, expiresIn: ttl };
+  log(document.getElementById('fx-log'),
+    `[QUOTE] rate=${withMargin.toFixed(2)} VND/USD (market=${fx.marketRate}, margin=${(fx.margin*100).toFixed(1)}%), TTL=${ttl}s`, 'info');
+  if (fx.quoteTimer) clearInterval(fx.quoteTimer);
+  fx.quoteTimer = setInterval(() => {
+    if (fx.quote) {
+      fx.quote.expiresIn--;
+      if (fx.quote.expiresIn <= 0) {
+        log(document.getElementById('fx-log'), '[QUOTE] expired', 'warn');
+        fx.quote = null;
+        clearInterval(fx.quoteTimer);
+      }
+      fxRender();
+    }
+  }, 1000);
+  fxRender();
+}
+function fxPay() {
+  if (!fx.quote) { log(document.getElementById('fx-log'), '[reject] no quote — get one first', 'err'); return; }
+  if (fx.quote.expiresIn <= 0) { log(document.getElementById('fx-log'), '[reject] quote expired', 'err'); return; }
+  const presentment = parseFloat(document.getElementById('fx-amount').value);
+  const settlement = Math.round(presentment * fx.quote.rate);
+  const marketSettlement = Math.round(presentment * fx.quote.marketRateAtQuote);
+  const marginDelta = marketSettlement - settlement;
+  fx.payment = {
+    id: 'fxp-' + Date.now(), presentmentAmount: presentment, presentmentCurrency: 'USD',
+    settlementAmount: settlement, settlementCurrency: 'VND', lockedRate: fx.quote.rate
+  };
+  if (marginDelta !== 0) fx.pnl.push({ kind: 'MARGIN', currency: 'VND', amount: marginDelta });
+  log(document.getElementById('fx-log'),
+    `[PAID] $${presentment} → ₫${fmt(settlement)} at locked ${fx.quote.rate.toFixed(2)}. Margin booked: ₫${fmt(marginDelta)}`, 'ok');
+  fxRender();
+}
+function fxRefund() {
+  if (!fx.payment) { log(document.getElementById('fx-log'), '[reject] no payment', 'err'); return; }
+  const rfd = parseFloat(document.getElementById('fx-refund').value);
+  if (rfd > fx.payment.presentmentAmount) {
+    log(document.getElementById('fx-log'), `[reject] refund $${rfd} > paid $${fx.payment.presentmentAmount}`, 'err');
+    return;
+  }
+  // Settlement at ORIGINAL locked rate
+  const settlementRefund = Math.round(rfd * fx.payment.lockedRate);
+  // Settlement at CURRENT market rate
+  const settlementAtCurrent = Math.round(rfd * fx.marketRate);
+  const fxDelta = settlementAtCurrent - settlementRefund;
+  if (fxDelta !== 0) fx.pnl.push({ kind: 'FX_DELTA_REFUND', currency: 'VND', amount: fxDelta });
+  log(document.getElementById('fx-log'),
+    `[REFUND] Customer receives $${rfd} USD. Our settlement cost at locked rate: ₫${fmt(settlementRefund)}. Current market cost would be: ₫${fmt(settlementAtCurrent)}. FX delta booked: ₫${fmt(fxDelta)}`, 'ok');
+  fxRender();
+}
+function fxRender() {
+  const $ = id => document.getElementById(id);
+  if (fx.quote) {
+    $('fx-q-rate').textContent = fx.quote.rate.toFixed(2);
+    $('fx-q-ttl').innerHTML = fx.quote.expiresIn > 0 ? fx.quote.expiresIn + 's' : '<span class="badge danger">expired</span>';
+  } else {
+    $('fx-q-rate').textContent = '—';
+    $('fx-q-ttl').textContent = '—';
+  }
+  if (fx.payment) {
+    $('fx-p-pres').textContent = '$' + fx.payment.presentmentAmount;
+    $('fx-p-sett').textContent = '₫' + fmt(fx.payment.settlementAmount);
+    $('fx-p-locked').textContent = fx.payment.lockedRate.toFixed(2);
+  } else {
+    $('fx-p-pres').textContent = '—'; $('fx-p-sett').textContent = '—'; $('fx-p-locked').textContent = '—';
+  }
+  const pb = document.querySelector('#fx-pnl tbody');
+  pb.innerHTML = fx.pnl.map(e => `<tr><td><span class="badge ${e.kind==='MARGIN'?'success':'warn'}">${e.kind}</span></td><td>${e.currency}</td><td>${fmt(e.amount)}</td></tr>`).join('');
+  const net = fx.pnl.reduce((s, e) => s + e.amount, 0);
+  const $net = $('fx-net');
+  $net.textContent = fmt(net);
+  $net.style.color = net >= 0 ? 'var(--success)' : 'var(--danger)';
+}
+fxRender();
+
+</script>
+</body>
+</html>

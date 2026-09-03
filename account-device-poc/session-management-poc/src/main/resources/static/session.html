@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Multi-Device Session POC</title>
+<style>
+  :root { --bg:#0f1318; --panel:#151b22; --panel2:#1c232c; --line:#222b34; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --warn:#d29922; --bad:#f85149; --good:#3fb950; --purple:#bc8cff; }
+  *{box-sizing:border-box} html,body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:14px}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  h1{margin:0;font-size:18px}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  main{padding:20px;max-width:1280px;margin:0 auto}
+  .row{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+  @media(min-width:900px){.row.dev{grid-template-columns:1fr 1fr 1fr}}
+  @media(min-width:900px){.row.two{grid-template-columns:1fr 1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .panel h2{margin:0 0 8px;font-size:14px;color:var(--accent);display:flex;justify-content:space-between;align-items:center}
+  .btn{background:#1f6feb;color:#fff;border:0;padding:6px 11px;border-radius:5px;cursor:pointer;font-size:13px;margin-right:5px;margin-top:5px}
+  .btn:hover{background:#388bfd}
+  .btn.ghost{background:#2a313a;color:var(--text)} .btn.ghost:hover{background:#3a424c}
+  .btn.danger{background:#a4252e} .btn.danger:hover{background:#cf3e48}
+  .btn.warn{background:#9e6a00} .btn.warn:hover{background:#c08000}
+  .device{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px}
+  .device.logged-out{opacity:0.7}
+  .device h3{margin:0;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  .device .state{font-size:12px;padding:2px 8px;border-radius:99px}
+  .state.ok{background:#0d2818;color:var(--good)} .state.no{background:#2d1517;color:var(--bad)} .state.warn{background:#2d2616;color:var(--warn)}
+  .token{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--bg);padding:6px;border:1px solid var(--line);border-radius:4px;word-break:break-all;color:var(--muted)}
+  .token b{color:var(--text)}
+  .res{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;padding:6px;border-radius:4px;white-space:pre-wrap;margin-top:4px;background:var(--bg)}
+  .res.ok{color:var(--good)} .res.bad{color:var(--bad)}
+  table.sessions{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  table.sessions td,table.sessions th{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left}
+  table.sessions th{color:var(--muted);font-weight:500}
+  .pill{font-size:11px;padding:1px 6px;border-radius:99px;background:#1e252d;color:var(--muted)}
+  .pill.revoked{background:#2d1517;color:var(--bad)}
+  .pill.live{background:#0d2818;color:var(--good)}
+  .userpick label{margin-right:14px;cursor:pointer}
+  input[type=text],input[type=password]{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:5px 7px;border-radius:4px;font-size:12.5px;font-family:inherit}
+  .why{color:var(--muted);font-size:12.5px;margin-top:6px}
+  .why code{background:#1e252d;padding:1px 5px;border-radius:3px;color:#d2a8ff;font-size:11.5px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>POC 29 · Multi-Device Sessions</h1>
+    <div class="sub">JWT + token-version + refresh-token rotation. Three simulated devices.</div>
+  </div>
+  <div>
+    <span class="userpick">Login as:
+      <label><input type="radio" name="user" value="alice" checked> alice</label>
+      <label><input type="radio" name="user" value="bob"> bob</label>
+    </span>
+    <button class="btn ghost" onclick="loadSessions()">↻ Refresh sessions</button>
+  </div>
+</header>
+<main>
+
+<div class="row dev">
+  <div class="panel">
+    <h2>📱 Phone</h2>
+    <div id="dev-phone" class="device logged-out"></div>
+  </div>
+  <div class="panel">
+    <h2>💻 Laptop</h2>
+    <div id="dev-laptop" class="device logged-out"></div>
+  </div>
+  <div class="panel">
+    <h2>📲 Tablet</h2>
+    <div id="dev-tablet" class="device logged-out"></div>
+  </div>
+</div>
+
+<div class="row two">
+  <div class="panel">
+    <h2>Account controls</h2>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap">
+      <input type="password" id="new-pwd" placeholder="new password" value="rotated">
+      <button class="btn warn" onclick="changePassword()">🔑 Change password (logs out everywhere)</button>
+    </div>
+    <div class="why">
+      <p>Changing the password bumps <code>tokenVersion</code> on the user record. Every JWT and refresh token previously issued embedded the <i>old</i> version — so every device drops to "stale token version" on next validation. Each device must reauthenticate.</p>
+      <p>A pure JWT can't be revoked. The version-check on every validation is what gives us instant logout-everywhere without a per-token blocklist.</p>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Active sessions <span id="user-meta" class="pill"></span></h2>
+    <table class="sessions"><thead><tr><th>device</th><th>session id</th><th>tv@issue</th><th>last seen</th><th>state</th></tr></thead><tbody id="sessions"></tbody></table>
+    <div class="why" style="margin-top:8px">Token version mismatch makes a session effectively dead even before its row is marked revoked — the JWT can't validate. The session table still tracks devices for the "Active sessions" UI and for explicit per-device logout.</div>
+  </div>
+</div>
+
+</main>
+<script>
+const API = '/api/session';
+const devices = {
+  phone:  { label:'Phone',  ua:'iPhone' },
+  laptop: { label:'Laptop', ua:'Mac' },
+  tablet: { label:'Tablet', ua:'iPad' }
+};
+const state = {
+  phone:  { access:null, refresh:null, sid:null },
+  laptop: { access:null, refresh:null, sid:null },
+  tablet: { access:null, refresh:null, sid:null }
+};
+
+function user() {
+  return document.querySelector('input[name=user]:checked').value;
+}
+function pwd(u) { return u === 'alice' ? 'wonderland' : 'buildit'; }
+
+function render() {
+  for (const [k, d] of Object.entries(devices)) {
+    const el = document.getElementById(`dev-${k}`);
+    const s = state[k];
+    const isIn = !!s.access;
+    el.classList.toggle('logged-out', !isIn);
+    el.innerHTML = `
+      <h3>${d.label} <span class="state ${isIn?'ok':'no'}">${isIn?'logged in':'logged out'}</span></h3>
+      ${isIn ? `
+        <div class="token"><b>session</b> ${escape(s.sid)}</div>
+        <div class="token"><b>access</b> ${trunc(s.access)}</div>
+        <div class="token"><b>refresh</b> ${trunc(s.refresh)}</div>
+        <div>
+          <button class="btn" onclick="whoami('${k}')">whoami</button>
+          <button class="btn ghost" onclick="refreshTok('${k}')">refresh tokens</button>
+          <button class="btn danger" onclick="logoutSession('${k}')">log out</button>
+        </div>
+      ` : `
+        <button class="btn" onclick="login('${k}')">Login on ${d.label}</button>
+      `}
+      <div id="res-${k}" class="res"></div>
+    `;
+  }
+}
+
+async function login(dev) {
+  const u = user();
+  const r = await fetch(`${API}/login`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+    username: u, password: pwd(u), deviceLabel: devices[dev].label
+  })});
+  const body = await r.json();
+  if (!r.ok) { showRes(dev, 'bad', JSON.stringify(body)); return; }
+  state[dev] = { access: body.accessToken, refresh: body.refreshToken, sid: body.sessionId };
+  render();
+  showRes(dev, 'ok', `logged in. access TTL=${body.accessExpiresInSeconds}s`);
+  loadSessions();
+}
+
+async function whoami(dev) {
+  const s = state[dev];
+  if (!s.access) return;
+  const r = await fetch(`${API}/whoami`, {headers:{'Authorization':'Bearer ' + s.access}});
+  const body = await r.json();
+  showRes(dev, r.ok ? 'ok' : 'bad', r.ok ? `userId=${body.userId} tv=${body.tokenVersion}` : 'INVALID — ' + body.error);
+}
+
+async function refreshTok(dev) {
+  const s = state[dev];
+  if (!s.refresh) return;
+  const r = await fetch(`${API}/refresh`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({refreshToken: s.refresh})});
+  const body = await r.json();
+  if (!r.ok) { showRes(dev, 'bad', 'refresh failed: ' + body.error); return; }
+  state[dev] = { access: body.accessToken, refresh: body.refreshToken, sid: body.sessionId };
+  render();
+  showRes(dev, 'ok', 'rotated. new pair issued.');
+  loadSessions();
+}
+
+async function logoutSession(dev) {
+  const s = state[dev];
+  if (!s.sid) return;
+  await fetch(`${API}/logout/${s.sid}`, {method:'POST'});
+  state[dev] = { access:null, refresh:null, sid:null };
+  render();
+  loadSessions();
+}
+
+async function changePassword() {
+  const u = user();
+  const usersR = await fetch(`${API}/users`).then(r => r.json());
+  const meta = usersR.find(x => x.username === u);
+  const newPwd = document.getElementById('new-pwd').value;
+  const r = await fetch(`${API}/logout-everywhere`, {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({userId: meta.userId, newPassword: newPwd})});
+  const body = await r.json();
+  // The local state still *holds* tokens, but they're now stale. Don't clear them — let the user
+  // see what "in-flight tokens are now invalid" actually looks like when they hit whoami.
+  for (const dev of Object.keys(devices)) {
+    if (state[dev].access) showRes(dev, 'warn', `tokens still local, but tv bumped to ${body.newTokenVersion}. Click whoami →`);
+  }
+  loadSessions();
+}
+
+async function loadSessions() {
+  const u = user();
+  const usersR = await fetch(`${API}/users`).then(r => r.json());
+  const meta = usersR.find(x => x.username === u);
+  document.getElementById('user-meta').textContent = `${u} · userId=${meta.userId} · tokenVersion=${meta.tokenVersion}`;
+  const sessionsR = await fetch(`${API}/devices/${meta.userId}`).then(r => r.json());
+  const tbody = document.getElementById('sessions');
+  if (sessionsR.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:var(--muted);text-align:center">no sessions</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sessionsR.map(s => `
+    <tr>
+      <td>${escape(s.deviceLabel)}</td>
+      <td style="font-family:ui-monospace;color:var(--muted)">${s.sessionId.slice(0,8)}…</td>
+      <td>${s.tokenVersionAtIssue}</td>
+      <td style="color:var(--muted)">${s.lastSeenAt.replace('T',' ').slice(0,19)}</td>
+      <td><span class="pill ${s.revoked?'revoked':'live'}">${s.revoked?'revoked':'live'}</span></td>
+    </tr>
+  `).join('');
+}
+
+function showRes(dev, cls, msg) {
+  const el = document.getElementById(`res-${dev}`);
+  el.className = 'res ' + cls;
+  el.textContent = msg;
+}
+function trunc(t) { return t.slice(0,18) + '…' + t.slice(-12); }
+function escape(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+document.querySelectorAll('input[name=user]').forEach(r => r.addEventListener('change', () => {
+  for (const k of Object.keys(devices)) state[k] = {access:null, refresh:null, sid:null};
+  render(); loadSessions();
+}));
+render();
+loadSessions();
+</script>
+</body>
+</html>

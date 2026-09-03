@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: cqrs-projection-poc
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      properties:
+        isolation.level: read_committed
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+
+app:
+  es:
+    host: ${ES_HOST:localhost}
+    port: ${ES_PORT:9200}
+
+server:
+  port: 8108
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}

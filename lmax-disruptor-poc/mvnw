@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Minimal Maven Wrapper for *nix. Downloads Maven 3.9.9 into
+# ~/.m2/wrapper/dists on first run, then invokes mvn.
+set -euo pipefail
+
+MVN_VERSION="3.9.9"
+DIST_URL="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${MVN_VERSION}/apache-maven-${MVN_VERSION}-bin.zip"
+CACHE_DIR="${HOME}/.m2/wrapper/dists/apache-maven-${MVN_VERSION}-bin"
+MVN_HOME="${CACHE_DIR}/apache-maven-${MVN_VERSION}"
+
+if [[ ! -x "${MVN_HOME}/bin/mvn" ]]; then
+  echo "[mvnw] Downloading Apache Maven ${MVN_VERSION}..."
+  mkdir -p "${CACHE_DIR}"
+  ZIP="${CACHE_DIR}/maven.zip"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "${ZIP}" "${DIST_URL}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "${ZIP}" "${DIST_URL}"
+  else
+    echo "[mvnw] Need curl or wget to download Maven." >&2
+    exit 1
+  fi
+  echo "[mvnw] Extracting..."
+  unzip -q "${ZIP}" -d "${CACHE_DIR}"
+  rm -f "${ZIP}"
+  chmod +x "${MVN_HOME}/bin/mvn"
+fi
+
+exec "${MVN_HOME}/bin/mvn" "$@"

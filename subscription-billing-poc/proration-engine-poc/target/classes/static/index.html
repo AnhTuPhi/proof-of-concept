@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proration Engine — Subscription Billing</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%234338ca'/%3E%3Ctext x='14' y='20' text-anchor='middle' font-family='Arial' font-weight='700' font-size='16' fill='white'%3E%24%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">$</span>
+      Subscription Billing
+    </div>
+    <nav class="app-nav">
+      <a href="/" class="active">Proration</a>
+      <a href="http://localhost:8082/">Dunning</a>
+      <a href="http://localhost:8083/">Usage</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="meta"></div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Plan Changes &amp; Proration</h1>
+    <p class="page-subtitle">
+      Mid-cycle upgrades, downgrades, and cancellations.
+      Stripe-style: <strong>always invoice — never charge directly</strong>; surplus from downgrades becomes credit, not cash.
+    </p>
+
+    <div class="grid cols-3">
+      <section class="card" id="card-plans">
+        <div class="card-header">
+          <h2 class="card-title">Plans</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadPlans()">Refresh</button>
+        </div>
+        <div id="plans-list"></div>
+      </section>
+
+      <section class="card" id="card-new-sub">
+        <div class="card-header">
+          <h2 class="card-title">Create Subscription</h2>
+        </div>
+        <form id="form-new-sub" onsubmit="return createSubscription(event)">
+          <div class="form-row">
+            <label for="ns-customer">Customer ID</label>
+            <input id="ns-customer" type="text" placeholder="cust-001" required />
+          </div>
+          <div class="form-row">
+            <label for="ns-plan">Plan</label>
+            <select id="ns-plan" required></select>
+          </div>
+          <div class="form-row">
+            <label for="ns-today">Start Date</label>
+            <input id="ns-today" type="date" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Create Subscription</button>
+        </form>
+      </section>
+
+      <section class="card" id="card-credit-lookup">
+        <div class="card-header">
+          <h2 class="card-title">Credit Balance</h2>
+        </div>
+        <form onsubmit="return lookupCredit(event)">
+          <div class="form-row">
+            <label for="cb-customer">Customer ID</label>
+            <input id="cb-customer" type="text" placeholder="cust-001" required />
+          </div>
+          <button type="submit" class="btn btn-secondary" style="width:100%">Look Up</button>
+        </form>
+        <div id="credit-result" class="mt-3"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Subscriptions</h2>
+          <p class="card-subtitle">Click a row to see invoices and run plan changes.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadSubscriptions()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table id="subs-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Customer</th>
+              <th>Plan</th>
+              <th>Period</th>
+              <th>Status</th>
+              <th>Pending</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="subs-body">
+            <tr class="loading-row"><td colspan="7"><span class="spinner"></span> Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="grid cols-2">
+      <section class="card" id="card-change">
+        <div class="card-header">
+          <h2 class="card-title">Change Plan</h2>
+          <p class="card-subtitle" id="change-target">Select a subscription above</p>
+        </div>
+        <form id="form-change" onsubmit="return changePlan(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="ch-plan">New Plan</label>
+              <select id="ch-plan" required></select>
+            </div>
+            <div class="form-row">
+              <label for="ch-strategy">Strategy</label>
+              <select id="ch-strategy" required>
+                <option value="IMMEDIATE_PRORATE">Immediate (prorate)</option>
+                <option value="END_OF_CYCLE">End of cycle</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="ch-today">Effective Date</label>
+              <input id="ch-today" type="date" required />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn-primary" id="ch-submit" disabled>Apply</button>
+            </div>
+          </div>
+          <p class="hint mt-2">
+            <strong>Immediate</strong> issues a prorated credit for the unused portion of the current plan plus a prorated
+            charge for the new plan. <strong>End of cycle</strong> schedules the switch for the next renewal — no money moves today.
+          </p>
+        </form>
+      </section>
+
+      <section class="card" id="card-cancel">
+        <div class="card-header">
+          <h2 class="card-title">Cancel Subscription</h2>
+          <p class="card-subtitle" id="cancel-target">Select a subscription above</p>
+        </div>
+        <form id="form-cancel" onsubmit="return cancelSub(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="cn-today">Effective Date</label>
+              <input id="cn-today" type="date" required />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn-danger" id="cn-submit" disabled>Cancel</button>
+            </div>
+          </div>
+          <p class="hint mt-2">
+            Unused days are credited to the customer's balance — no cash refund.
+          </p>
+        </form>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Invoices</h2>
+          <p class="card-subtitle" id="invoices-target">Select a subscription to view invoices</p>
+        </div>
+      </div>
+      <div id="invoices-area">
+        <div class="empty-state">No subscription selected.</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

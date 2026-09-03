@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/notifications
+    username: notif
+    password: notif
+  kafka:
+    bootstrap-servers: kafka:29092
+
+logging:
+  level:
+    root: INFO
+    com.example.cdc: INFO

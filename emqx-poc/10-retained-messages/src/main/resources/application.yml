@@ -1,0 +1,19 @@
+server:
+  port: 8110
+spring:
+  application.name: poc-10-retained-messages
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: retained-poc
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 30
+  connection-timeout-seconds: 10
+  max-inflight: 50
+  automatic-reconnect: false
+  tls:
+    enabled: false
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

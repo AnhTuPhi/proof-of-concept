@@ -1,0 +1,19 @@
+server:
+  port: 8104
+spring:
+  application.name: poc-04-shared-subscriptions
+mqtt:
+  broker-url: tcp://localhost:1880
+  client-id-prefix: sharedsub
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 60
+  connection-timeout-seconds: 10
+  max-inflight: 100
+  automatic-reconnect: true
+  tls:
+    enabled: false
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

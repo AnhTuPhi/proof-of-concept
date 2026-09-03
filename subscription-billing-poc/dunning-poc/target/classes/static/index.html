@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dunning — Subscription Billing</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%234338ca'/%3E%3Ctext x='14' y='20' text-anchor='middle' font-family='Arial' font-weight='700' font-size='16' fill='white'%3E%24%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">$</span>
+      Subscription Billing
+    </div>
+    <nav class="app-nav">
+      <a href="http://localhost:8081/">Proration</a>
+      <a href="/" class="active">Dunning</a>
+      <a href="http://localhost:8083/">Usage</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="meta"></div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Failed-Payment Recovery</h1>
+    <p class="page-subtitle">
+      State machine: <strong>ACTIVE → PAST_DUE → SUSPENDED → CANCELED</strong>.
+      Smart-retry schedule, grace period, and customer-driven recovery. Use <em>Tick</em> to advance simulated time.
+    </p>
+
+    <div class="grid cols-3">
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Time Simulator</h2>
+        </div>
+        <div class="form-row">
+          <label for="tick-date">Today</label>
+          <input id="tick-date" type="date" />
+          <p class="hint">Run scheduled retries due on/before this date and escalate past-due / suspended subs.</p>
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="tickClock()">Tick →</button>
+        <div id="tick-result" class="mt-3 text-sm text-muted"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Renew Subscription</h2>
+        </div>
+        <p class="card-subtitle" id="renew-target">Select a subscription below</p>
+        <div class="form-row">
+          <label for="renew-date">Effective Date</label>
+          <input id="renew-date" type="date" />
+        </div>
+        <button class="btn btn-primary" style="width:100%" id="renew-btn" disabled onclick="renewSelected()">
+          Attempt Renewal
+        </button>
+        <p class="hint mt-2">Triggers an initial charge. Failure starts the dunning flow.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Update Payment Method</h2>
+        </div>
+        <p class="card-subtitle" id="pm-target">Select a subscription below</p>
+        <form onsubmit="return updatePaymentMethod(event)">
+          <div class="form-row">
+            <label for="pm-brand">Brand</label>
+            <select id="pm-brand">
+              <option>VISA</option>
+              <option>MASTERCARD</option>
+              <option>AMEX</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="pm-last4">Last 4</label>
+            <input id="pm-last4" type="text" maxlength="4" placeholder="4242" pattern="\d{4}" />
+          </div>
+          <div class="form-row">
+            <label for="pm-exp">Expires On</label>
+            <input id="pm-exp" type="date" />
+          </div>
+          <div class="form-row">
+            <label for="pm-today">Today</label>
+            <input id="pm-today" type="date" />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%" id="pm-submit" disabled>Update Card</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Subscriptions</h2>
+          <p class="card-subtitle">Click a row to inspect timeline and run actions.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadAll()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Customer</th>
+              <th>Plan</th>
+              <th class="num">Monthly</th>
+              <th>Status</th>
+              <th>Next Renewal</th>
+              <th>Susp. Sched.</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="subs-body">
+            <tr class="loading-row"><td colspan="8"><span class="spinner"></span> Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="grid cols-2">
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Renewal Attempts</h2>
+            <p class="card-subtitle" id="attempts-target">Select a subscription</p>
+          </div>
+        </div>
+        <div id="attempts-area">
+          <div class="empty-state">No subscription selected.</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Dunning Timeline</h2>
+            <p class="card-subtitle" id="events-target">Select a subscription</p>
+          </div>
+        </div>
+        <div id="events-area">
+          <div class="empty-state">No subscription selected.</div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Notification Inbox</h2>
+          <p class="card-subtitle">Outbound emails captured by the in-memory NotificationGateway.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadNotifications()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Subscription</th>
+              <th>Template</th>
+              <th>To</th>
+            </tr>
+          </thead>
+          <tbody id="notif-body">
+            <tr class="loading-row"><td colspan="4"><span class="spinner"></span> Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

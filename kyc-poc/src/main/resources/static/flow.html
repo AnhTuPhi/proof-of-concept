@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KYC Workflow POC — Flow & Key Tech</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --panel-2: #1f2740;
+    --border: #2b3555;
+    --ink: #e8ecf5;
+    --ink-dim: #9aa4bf;
+    --accent: #6ea8ff;
+    --accent-2: #b892ff;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --terminal: #94a3b8;
+    --code-bg: #0a0e1a;
+    --shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+  }
+  a { color: var(--accent); }
+  code, pre {
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 0.85em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+  }
+  header {
+    padding: 40px 32px 24px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--panel) 0%, var(--bg) 100%);
+  }
+  header h1 { margin: 0 0 6px; font-size: 28px; font-weight: 700; }
+  header p { margin: 0; color: var(--ink-dim); max-width: 780px; }
+  nav.toc {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    background: var(--panel); position: sticky; top: 0; z-index: 10;
+  }
+  nav.toc a {
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    text-decoration: none; color: var(--ink); font-size: 13px;
+  }
+  nav.toc a:hover { background: var(--border); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 32px; }
+  section { margin-bottom: 56px; scroll-margin-top: 72px; }
+  section h2 {
+    font-size: 22px; margin: 0 0 6px;
+    border-left: 4px solid var(--accent); padding-left: 12px;
+  }
+  section .lede { color: var(--ink-dim); margin: 0 0 20px; }
+  h3 { font-size: 16px; margin-top: 28px; margin-bottom: 6px; color: var(--ink); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--accent); }
+  .card p { margin: 0; color: var(--ink-dim); font-size: 14px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+  th { background: var(--panel-2); color: var(--ink-dim); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+    border: 1px solid var(--border);
+  }
+  .pill.ok { color: var(--ok); border-color: var(--ok); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  .pill.err { color: var(--err); border-color: var(--err); }
+  .pill.dim { color: var(--ink-dim); }
+
+  .diagram-wrap {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .caption { color: var(--ink-dim); font-size: 13px; margin-top: 8px; text-align: center; }
+
+  /* State-machine SVG styling */
+  .sm-node rect { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; rx: 8; }
+  .sm-node.active rect { fill: #2a3a6b; stroke: var(--accent); stroke-width: 2.5; }
+  .sm-node.terminal rect { fill: #263042; stroke: var(--terminal); }
+  .sm-node.terminal.approved rect { stroke: var(--ok); }
+  .sm-node.terminal.rejected rect { stroke: var(--err); }
+  .sm-node.terminal.dlq rect { stroke: var(--warn); }
+  .sm-node.failure rect { stroke: var(--err); }
+  .sm-node text { fill: var(--ink); font-size: 11px; font-family: inherit; text-anchor: middle; dominant-baseline: middle; }
+  .sm-edge { fill: none; stroke: var(--border); stroke-width: 1.5; }
+  .sm-edge.retry { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .sm-edge.fail { stroke: var(--err); }
+  .sm-edge.dlq { stroke: var(--warn); }
+  .sm-edge-label { font-size: 10px; fill: var(--ink-dim); font-family: inherit; }
+
+  /* Interactive demo */
+  .demo-panel {
+    display: grid; grid-template-columns: 1fr 340px; gap: 20px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  @media (max-width: 900px) { .demo-panel { grid-template-columns: 1fr; } }
+  .demo-controls h3 { margin-top: 0; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--border);
+  }
+  button:hover:not(:disabled) { background: var(--border); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #0a0e1a; border-color: var(--accent); }
+  button.primary:hover:not(:disabled) { background: #86b8ff; }
+  button.warn { border-color: var(--warn); color: var(--warn); }
+  button.err { border-color: var(--err); color: var(--err); }
+  button.ok { border-color: var(--ok); color: var(--ok); }
+
+  .audit-log {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; height: 260px; overflow-y: auto; font-size: 12px; font-family: inherit;
+  }
+  .audit-log .row { padding: 4px 0; border-bottom: 1px dashed var(--border); }
+  .audit-log .row:last-child { border-bottom: none; }
+  .audit-log .from { color: var(--ink-dim); }
+  .audit-log .to { color: var(--accent); font-weight: 600; }
+  .audit-log .event { color: var(--accent-2); }
+  .audit-log .actor { color: var(--ink-dim); font-style: italic; }
+  .audit-log .detail { color: var(--ink-dim); display: block; margin-top: 2px; font-size: 11px; }
+
+  .status-line {
+    display: flex; gap: 12px; align-items: center; padding: 8px 12px;
+    background: var(--panel-2); border-radius: 6px; margin-bottom: 12px; font-size: 13px;
+  }
+  .status-line strong { color: var(--accent); }
+
+  /* Sequence diagram */
+  .seq-lane text { fill: var(--ink); font-size: 12px; font-family: inherit; text-anchor: middle; font-weight: 600; }
+  .seq-lifeline { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 4; }
+  .seq-arrow { stroke: var(--accent); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  .seq-arrow.retry { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .seq-arrow.fail { stroke: var(--err); }
+  .seq-label { fill: var(--ink); font-size: 11px; font-family: inherit; }
+  .seq-note { fill: var(--ink-dim); font-size: 10px; font-family: inherit; font-style: italic; }
+  .seq-activation { fill: var(--panel-2); stroke: var(--accent); stroke-width: 1; }
+
+  /* Consistency diagram */
+  .pod-box { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.5; rx: 8; }
+  .pod-label { fill: var(--ink); font-size: 12px; font-weight: 600; font-family: inherit; text-anchor: middle; }
+  .pod-inner { fill: var(--ink-dim); font-size: 10px; font-family: inherit; text-anchor: middle; }
+  .db-box { fill: #1a2540; stroke: var(--accent); stroke-width: 2; rx: 6; }
+  .race { fill: var(--err); font-size: 11px; font-weight: 600; font-family: inherit; text-anchor: middle; }
+  .arrow-broken { stroke: var(--err); stroke-width: 1.5; fill: none; stroke-dasharray: 3 3; marker-end: url(#arrowRed); }
+  .arrow-ok { stroke: var(--ok); stroke-width: 1.5; fill: none; marker-end: url(#arrowGreen); }
+
+  footer {
+    padding: 24px 32px 40px; text-align: center; color: var(--ink-dim);
+    border-top: 1px solid var(--border); font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>KYC Workflow POC — Flow & Key Tech</h1>
+  <p>Interactive walkthrough of the state machine, the async retry+DLQ pipeline, and the consistency issues that show up when you scale beyond one JVM. Companion to <a href="/">the live UI</a>, <code>ISSUE.md</code>, <code>TECHNICAL.md</code>, and <code>CONSISTENCY.md</code>.</p>
+</header>
+
+<nav class="toc">
+  <a href="#problem">1. The problem</a>
+  <a href="#solution">2. Solution shape</a>
+  <a href="#statemachine">3. State machine (interactive)</a>
+  <a href="#sequence">4. Async pipeline</a>
+  <a href="#retry">5. Retry &amp; DLQ</a>
+  <a href="#tech">6. Tech by responsibility</a>
+  <a href="#consistency">7. Scaling &amp; consistency</a>
+  <a href="#debt">8. Tech debt</a>
+</nav>
+
+<main>
+
+<!-- ============ 1. Problem ============ -->
+<section id="problem">
+  <h2>1. The problem, in one paragraph</h2>
+  <p class="lede">KYC onboarding is not a single request — it is a multi-step, long-running orchestration over slow, flaky external services. Naive implementations fail in seven predictable ways.</p>
+  <div class="cards">
+    <div class="card"><h4>State corruption</h4><p>Two async callbacks race on the same case. Audit log and status field diverge.</p></div>
+    <div class="card"><h4>Silent data loss</h4><p>A transient 5xx from OCR bubbles up as an unchecked exception; case stalls forever.</p></div>
+    <div class="card"><h4>No bounded retry</h4><p>Either one shot or infinite hammering. Both are bad.</p></div>
+    <div class="card"><h4>No DLQ</h4><p>Exhausted cases go to a <code>status='ERROR'</code> row nobody triages.</p></div>
+    <div class="card"><h4>Reviewer vs. pipeline</h4><p>Human approval races with an in-flight retry. Same status column, last write wins.</p></div>
+    <div class="card"><h4>Bytes in the DB</h4><p>ID card images blow up backups, complicate GDPR erasure.</p></div>
+    <div class="card"><h4>No audit trail</h4><p>"What happened to case X" requires grep across pod logs that already rolled over.</p></div>
+  </div>
+</section>
+
+<!-- ============ 2. Solution ============ -->
+<section id="solution">
+  <h2>2. Solution shape</h2>
+  <p class="lede">One central state machine. Bounded async executor. Per-step retry budget. First-class DLQ. Audit as a first-class artifact.</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 1000 340" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#6ea8ff"/>
+        </marker>
+        <marker id="arrowGrey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#9aa4bf"/>
+        </marker>
+      </defs>
+
+      <!-- Browser -->
+      <g class="sm-node"><rect x="20" y="140" width="130" height="60"/><text x="85" y="163">Browser SPA</text><text x="85" y="182" fill="#9aa4bf">polls /stats every 2s</text></g>
+      <!-- Controller -->
+      <g class="sm-node"><rect x="200" y="140" width="150" height="60"/><text x="275" y="163">KycController</text><text x="275" y="182" fill="#9aa4bf">returns fast</text></g>
+      <!-- State machine -->
+      <g class="sm-node"><rect x="410" y="30" width="180" height="80"/><text x="500" y="55">KycStateMachine</text><text x="500" y="75" fill="#9aa4bf">transition table</text><text x="500" y="92" fill="#9aa4bf">+ synchronized(case)</text></g>
+      <!-- Workflow executor -->
+      <g class="sm-node"><rect x="410" y="140" width="180" height="60"/><text x="500" y="163">workflowExecutor</text><text x="500" y="182" fill="#9aa4bf">bounded pool</text></g>
+      <!-- Retry scheduler -->
+      <g class="sm-node"><rect x="410" y="240" width="180" height="60"/><text x="500" y="263">retryScheduler</text><text x="500" y="282" fill="#9aa4bf">exp backoff + jitter</text></g>
+      <!-- OCR / Address -->
+      <g class="sm-node"><rect x="640" y="90" width="150" height="60"/><text x="715" y="113">OcrService</text><text x="715" y="132" fill="#9aa4bf">mock (latency + fail%)</text></g>
+      <g class="sm-node"><rect x="640" y="170" width="150" height="60"/><text x="715" y="193">AddressVerification</text><text x="715" y="212" fill="#9aa4bf">mock (latency + fail%)</text></g>
+      <!-- DLQ + Case store -->
+      <g class="sm-node terminal dlq"><rect x="840" y="90" width="140" height="60"/><text x="910" y="113">DLQ</text><text x="910" y="132" fill="#9aa4bf">context + replay</text></g>
+      <g class="sm-node"><rect x="840" y="170" width="140" height="90"/><text x="910" y="197">KycCase</text><text x="910" y="216" fill="#9aa4bf">state, version,</text><text x="910" y="230" fill="#9aa4bf">audit log,</text><text x="910" y="244" fill="#9aa4bf">documents</text></g>
+
+      <!-- Edges -->
+      <path class="sm-edge" d="M 150 170 L 200 170" marker-end="url(#arrow)"/>
+      <path class="sm-edge" d="M 350 155 Q 380 120 410 90" marker-end="url(#arrow)"/>
+      <text class="sm-edge-label" x="355" y="115">fire()</text>
+      <path class="sm-edge" d="M 350 175 L 410 170" marker-end="url(#arrow)"/>
+      <text class="sm-edge-label" x="365" y="163">enqueue</text>
+      <path class="sm-edge" d="M 590 165 L 640 125" marker-end="url(#arrow)"/>
+      <path class="sm-edge" d="M 590 180 L 640 195" marker-end="url(#arrow)"/>
+      <path class="sm-edge fail" d="M 640 210 Q 610 235 590 260" marker-end="url(#arrow)"/>
+      <text class="sm-edge-label" x="615" y="245" fill="#f87171">fail</text>
+      <path class="sm-edge retry" d="M 590 250 Q 620 240 640 220" marker-end="url(#arrow)"/>
+      <text class="sm-edge-label" x="600" y="235" fill="#fbbf24">retry</text>
+      <path class="sm-edge dlq" d="M 590 260 Q 700 260 800 170 L 840 130" marker-end="url(#arrow)"/>
+      <text class="sm-edge-label" x="720" y="255" fill="#fbbf24">exhausted → DLQ</text>
+      <path class="sm-edge" d="M 590 70 Q 700 70 840 200" marker-end="url(#arrow)"/>
+      <text class="sm-edge-label" x="720" y="60">writes state + audit</text>
+    </svg>
+    <div class="caption">Every state change goes through <code>KycStateMachine.fire()</code>. Long steps run on <code>workflowExecutor</code>. Retries are scheduled durably (locally in the POC) with exponential backoff. Exhausted cases land in the DLQ with full context.</div>
+  </div>
+</section>
+
+<!-- ============ 3. State machine (interactive) ============ -->
+<section id="statemachine">
+  <h2>3. The state machine — click through it</h2>
+  <p class="lede">The transition table <em>is</em> the contract. Click a legal event on the right; only transitions that exist in the table succeed. Illegal events are rejected — this is what protects the case from out-of-order async callbacks.</p>
+
+  <div class="demo-panel">
+    <div class="diagram-wrap" style="padding: 12px;">
+      <svg id="sm-svg" viewBox="0 0 720 540" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="e-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#2b3555"/>
+          </marker>
+          <marker id="e-arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#fbbf24"/>
+          </marker>
+          <marker id="e-arrow-err" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#f87171"/>
+          </marker>
+        </defs>
+
+        <!-- Nodes -->
+        <g id="n-REGISTERED" class="sm-node" data-x="360" data-y="30"><rect x="290" y="10" width="140" height="40"/><text x="360" y="30">REGISTERED</text></g>
+        <g id="n-ID_UPLOADED" class="sm-node" data-x="360" data-y="100"><rect x="290" y="80" width="140" height="40"/><text x="360" y="100">ID_UPLOADED</text></g>
+        <g id="n-OCR_IN_PROGRESS" class="sm-node" data-x="200" data-y="180"><rect x="120" y="160" width="160" height="40"/><text x="200" y="180">OCR_IN_PROGRESS</text></g>
+        <g id="n-OCR_FAILED" class="sm-node failure" data-x="80" data-y="260"><rect x="10" y="240" width="140" height="40"/><text x="80" y="260">OCR_FAILED</text></g>
+        <g id="n-OCR_COMPLETED" class="sm-node" data-x="360" data-y="260"><rect x="290" y="240" width="140" height="40"/><text x="360" y="260">OCR_COMPLETED</text></g>
+        <g id="n-ADDRESS_VERIFICATION_IN_PROGRESS" class="sm-node" data-x="360" data-y="340"><rect x="240" y="320" width="240" height="40"/><text x="360" y="340">ADDRESS_VERIFICATION_IN_PROGRESS</text></g>
+        <g id="n-ADDRESS_VERIFICATION_FAILED" class="sm-node failure" data-x="600" data-y="340"><rect x="490" y="320" width="220" height="40"/><text x="600" y="340">ADDRESS_VERIFICATION_FAILED</text></g>
+        <g id="n-ADDRESS_VERIFIED" class="sm-node" data-x="360" data-y="410"><rect x="290" y="390" width="140" height="40"/><text x="360" y="410">ADDRESS_VERIFIED</text></g>
+        <g id="n-PENDING_MANUAL_REVIEW" class="sm-node" data-x="360" data-y="470"><rect x="260" y="450" width="200" height="40"/><text x="360" y="470">PENDING_MANUAL_REVIEW</text></g>
+        <g id="n-APPROVED" class="sm-node terminal approved" data-x="240" data-y="530"><rect x="180" y="510" width="120" height="30"/><text x="240" y="527">APPROVED</text></g>
+        <g id="n-REJECTED" class="sm-node terminal rejected" data-x="480" data-y="530"><rect x="420" y="510" width="120" height="30"/><text x="480" y="527">REJECTED</text></g>
+        <g id="n-DEAD_LETTER" class="sm-node terminal dlq" data-x="640" data-y="240"><rect x="570" y="220" width="140" height="40"/><text x="640" y="240">DEAD_LETTER</text></g>
+
+        <!-- Edges (drawn behind nodes visually via z, but SVG is ordered — edges after nodes still on top; but node backgrounds obscure endpoints. Acceptable.) -->
+        <g stroke-linecap="round">
+          <!-- REGISTERED -> ID_UPLOADED -->
+          <path class="sm-edge" d="M 360 50 L 360 80" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="368" y="68">UPLOAD_ID</text>
+          <!-- ID_UPLOADED -> OCR_IN_PROGRESS -->
+          <path class="sm-edge" d="M 320 120 L 220 160" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="230" y="140">START_OCR</text>
+          <!-- OCR_IN_PROGRESS -> OCR_COMPLETED -->
+          <path class="sm-edge" d="M 280 180 L 290 250" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="288" y="215">OCR_SUCCESS</text>
+          <!-- OCR_IN_PROGRESS -> OCR_FAILED -->
+          <path class="sm-edge fail" d="M 150 200 L 100 240" marker-end="url(#e-arrow-err)"/>
+          <text class="sm-edge-label" x="90" y="220" fill="#f87171">OCR_FAILURE</text>
+          <!-- OCR_FAILED -> OCR_IN_PROGRESS (retry) -->
+          <path class="sm-edge retry" d="M 100 240 Q 120 220 160 200" marker-end="url(#e-arrow-warn)"/>
+          <text class="sm-edge-label" x="115" y="230" fill="#fbbf24">RETRY</text>
+          <!-- OCR_FAILED -> DEAD_LETTER -->
+          <path class="sm-edge dlq" d="M 150 250 Q 380 250 570 240" marker-end="url(#e-arrow-warn)"/>
+          <text class="sm-edge-label" x="360" y="230" fill="#fbbf24">MOVE_TO_DLQ (from OCR_FAILED)</text>
+          <!-- OCR_COMPLETED -> ADDR_IN_PROGRESS -->
+          <path class="sm-edge" d="M 360 280 L 360 320" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="368" y="303">START_ADDRESS_VERIFY</text>
+          <!-- ADDR_IN_PROGRESS -> ADDR_VERIFIED -->
+          <path class="sm-edge" d="M 360 360 L 360 390" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="368" y="378">ADDRESS_VERIFY_SUCCESS</text>
+          <!-- ADDR_IN_PROGRESS -> ADDR_FAILED -->
+          <path class="sm-edge fail" d="M 480 340 L 490 340" marker-end="url(#e-arrow-err)"/>
+          <text class="sm-edge-label" x="470" y="332" fill="#f87171">FAIL</text>
+          <!-- ADDR_FAILED -> ADDR_IN_PROGRESS (retry) -->
+          <path class="sm-edge retry" d="M 490 345 Q 480 360 480 345" marker-end="url(#e-arrow-warn)"/>
+          <text class="sm-edge-label" x="500" y="360" fill="#fbbf24">RETRY</text>
+          <!-- ADDR_FAILED -> DEAD_LETTER -->
+          <path class="sm-edge dlq" d="M 600 320 Q 620 280 640 260" marker-end="url(#e-arrow-warn)"/>
+          <text class="sm-edge-label" x="640" y="300" fill="#fbbf24">MOVE_TO_DLQ</text>
+          <!-- ADDR_VERIFIED -> PENDING_MANUAL_REVIEW -->
+          <path class="sm-edge" d="M 360 430 L 360 450" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="368" y="443">SEND_TO_MANUAL_REVIEW</text>
+          <!-- PENDING -> APPROVED -->
+          <path class="sm-edge" d="M 310 490 L 260 510" marker-end="url(#e-arrow)"/>
+          <text class="sm-edge-label" x="245" y="504">MANUAL_APPROVE</text>
+          <!-- PENDING -> REJECTED -->
+          <path class="sm-edge fail" d="M 410 490 L 460 510" marker-end="url(#e-arrow-err)"/>
+          <text class="sm-edge-label" x="475" y="504" fill="#f87171">MANUAL_REJECT</text>
+          <!-- DEAD_LETTER -> ID_UPLOADED (replay) -->
+          <path class="sm-edge retry" d="M 570 235 Q 500 140 430 100" marker-end="url(#e-arrow-warn)"/>
+          <text class="sm-edge-label" x="530" y="150" fill="#fbbf24">REPLAY_FROM_DLQ</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="demo-controls">
+      <h3>Try firing events</h3>
+      <div class="status-line">Current state: <strong id="cur-state">REGISTERED</strong></div>
+      <div class="btn-row" id="event-buttons"></div>
+      <button id="reset-btn" style="width: 100%;">Reset case</button>
+      <h3 style="margin-top: 20px;">Audit log</h3>
+      <div class="audit-log" id="audit-log"></div>
+    </div>
+  </div>
+  <p class="caption">The buttons enable/disable based on which events are legal from the current state. Try firing <code>OCR_SUCCESS</code> from <code>REGISTERED</code> — it is rejected (would be an <code>IllegalTransitionException</code> → HTTP 409 in the real service).</p>
+</section>
+
+<!-- ============ 4. Sequence ============ -->
+<section id="sequence">
+  <h2>4. What the async pipeline looks like</h2>
+  <p class="lede">A happy-path case, showing which thread does what. The controller returns before the OCR call has even started.</p>
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 900 520" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="s-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#6ea8ff"/>
+        </marker>
+      </defs>
+      <!-- Lanes -->
+      <g class="seq-lane">
+        <text x="90" y="30">Browser</text>
+        <text x="250" y="30">Controller</text>
+        <text x="420" y="30">workflowExec</text>
+        <text x="590" y="30">retryScheduler</text>
+        <text x="770" y="30">OcrService</text>
+      </g>
+      <!-- Lifelines -->
+      <line class="seq-lifeline" x1="90" y1="45" x2="90" y2="500"/>
+      <line class="seq-lifeline" x1="250" y1="45" x2="250" y2="500"/>
+      <line class="seq-lifeline" x1="420" y1="45" x2="420" y2="500"/>
+      <line class="seq-lifeline" x1="590" y1="45" x2="590" y2="500"/>
+      <line class="seq-lifeline" x1="770" y1="45" x2="770" y2="500"/>
+
+      <!-- 1. POST /upload -->
+      <path class="seq-arrow" d="M 90 80 L 245 80" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="100" y="72">POST /kyc/{id}/upload</text>
+      <!-- 2. fire UPLOAD_ID + submit -->
+      <rect class="seq-activation" x="244" y="80" width="12" height="60"/>
+      <text class="seq-note" x="260" y="100">fire(UPLOAD_ID) → ID_UPLOADED</text>
+      <path class="seq-arrow" d="M 256 130 L 415 130" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="280" y="122">execute(runOcrAttempt)</text>
+      <!-- 3. return 200 to browser -->
+      <path class="seq-arrow" d="M 245 155 L 95 155" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="105" y="147">200 OK (case)</text>
+
+      <!-- 4. fire START_OCR -->
+      <rect class="seq-activation" x="414" y="130" width="12" height="230"/>
+      <text class="seq-note" x="435" y="180">synchronized(case): fire(START_OCR)</text>
+      <!-- 5. call OCR -->
+      <path class="seq-arrow" d="M 426 210 L 765 210" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="500" y="202">ocrService.extract(...)</text>
+      <text class="seq-note" x="520" y="225">(2-4s of latency, 20% chance fail)</text>
+      <!-- 6. OCR fails -->
+      <rect class="seq-activation" x="764" y="210" width="12" height="60"/>
+      <path class="seq-arrow fail" d="M 765 265 L 430 265" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="500" y="258">OcrResult.failure(...)</text>
+      <!-- 7. fire OCR_FAILURE + schedule retry -->
+      <text class="seq-note" x="435" y="290">fire(OCR_FAILURE) → OCR_FAILED</text>
+      <text class="seq-note" x="435" y="305">attempts++ (still &lt; budget)</text>
+      <path class="seq-arrow retry" d="M 426 335 L 585 335" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="440" y="327">schedule(retry, backoff)</text>
+      <!-- 8. retry fires -->
+      <rect class="seq-activation" x="584" y="335" width="12" height="40"/>
+      <path class="seq-arrow retry" d="M 596 375 L 415 400" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="440" y="395">execute(runOcrAttempt) again</text>
+      <!-- 9. success this time -->
+      <rect class="seq-activation" x="414" y="400" width="12" height="100"/>
+      <text class="seq-note" x="435" y="420">fire(RETRY) → OCR_IN_PROGRESS</text>
+      <path class="seq-arrow" d="M 426 445 L 765 445" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="500" y="437">ocrService.extract(...)</text>
+      <path class="seq-arrow" d="M 765 480 L 430 480" marker-end="url(#s-arrow)"/>
+      <text class="seq-label" x="500" y="472">OcrResult.success(...)</text>
+      <text class="seq-note" x="435" y="497">fire(OCR_SUCCESS) → OCR_COMPLETED → submit address step…</text>
+    </svg>
+    <div class="caption">HTTP thread is released within milliseconds. All slow work happens on the executor. Retries are handed off to the scheduler; workflow threads stay free for real work.</div>
+  </div>
+</section>
+
+<!-- ============ 5. Retry & DLQ ============ -->
+<section id="retry">
+  <h2>5. Retry &amp; DLQ mechanics</h2>
+  <div class="grid-2">
+    <div>
+      <h3>Exponential backoff with jitter</h3>
+      <p>Formula from <code>KycWorkflowService.computeBackoff</code>:</p>
+      <pre>backoff(n) = min( 500 * 2^n + jitter[0,500) , 10_000 )   // ms</pre>
+      <table>
+        <thead><tr><th>Attempt</th><th>Base (ms)</th><th>With jitter (range)</th></tr></thead>
+        <tbody>
+          <tr><td>1st retry</td><td>500</td><td>500 – 999</td></tr>
+          <tr><td>2nd retry</td><td>1000</td><td>1000 – 1499</td></tr>
+          <tr><td>3rd retry</td><td>2000</td><td>2000 – 2499</td></tr>
+          <tr><td>4th retry</td><td>4000</td><td>4000 – 4499</td></tr>
+          <tr><td>≥ 5th retry</td><td>—</td><td>capped at 10 000</td></tr>
+        </tbody>
+      </table>
+      <p style="color: var(--ink-dim); font-size: 13px; margin-top: 12px;">Jitter prevents a herd of retries hitting a recovering provider in lockstep. The cap keeps the wait bounded.</p>
+    </div>
+    <div>
+      <h3>DLQ lifecycle</h3>
+      <ol style="padding-left: 20px; color: var(--ink-dim);">
+        <li>Step fails, <code>attempts++</code>.</li>
+        <li>If <code>attempts &lt; max</code> → schedule next retry.</li>
+        <li>If <code>attempts &gt;= max</code> → <code>DlqEntry(caseId, failedAtState, step, lastError, attempts)</code> saved.</li>
+        <li>Fire <code>MOVE_TO_DLQ</code> — case's audit log now records the DLQ transition.</li>
+        <li>Operator lists DLQ, inspects, hits <b>Replay</b>.</li>
+        <li>Fire <code>REPLAY_FROM_DLQ</code> → <code>ID_UPLOADED</code>, reset attempt counters, mark entry replayed, resubmit.</li>
+      </ol>
+      <p style="color: var(--warn); font-size: 13px;"><b>Idempotency:</b> the DLQ entry has a <code>replayed</code> flag flipped inside the same call. Double-clicking Replay does not double-fire the pipeline.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. Tech by responsibility ============ -->
+<section id="tech">
+  <h2>6. Key tech, grouped by responsibility</h2>
+  <table>
+    <thead><tr><th>Responsibility</th><th>Tech</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>HTTP surface</td><td>Spring MVC + Jackson</td><td><code>controller/KycController.java</code></td></tr>
+      <tr><td>Central error handling</td><td><code>@RestControllerAdvice</code></td><td><code>controller/GlobalExceptionHandler.java</code></td></tr>
+      <tr><td>State transition enforcement</td><td>Custom transition table + <code>synchronized</code></td><td><code>statemachine/KycStateMachine.java</code></td></tr>
+      <tr><td>Async orchestration</td><td><code>ThreadPoolTaskExecutor</code> (bounded)</td><td><code>config/AsyncConfig.java</code></td></tr>
+      <tr><td>Retry scheduling</td><td><code>ScheduledThreadPoolExecutor</code> + backoff+jitter</td><td><code>service/KycWorkflowService.computeBackoff</code></td></tr>
+      <tr><td>Case + DLQ persistence (POC)</td><td><code>ConcurrentHashMap</code></td><td><code>repository/KycCaseRepository.java</code></td></tr>
+      <tr><td>Audit log</td><td>Synchronized list on aggregate</td><td><code>model/KycCase.java</code></td></tr>
+      <tr><td>Document as reference</td><td>Mock S3 key generator</td><td><code>service/DocumentService.java</code></td></tr>
+      <tr><td>Failure injection</td><td><code>application.yml</code> config</td><td><code>OcrService</code>, <code>AddressVerificationService</code></td></tr>
+      <tr><td>UI</td><td>Vanilla HTML/JS SPA, 2 s poll</td><td><code>src/main/resources/static/*</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ 7. Consistency ============ -->
+<section id="consistency">
+  <h2>7. Consistency when you scale beyond one JVM</h2>
+  <p class="lede">The POC uses three mechanisms that only work inside one JVM. Deploy N replicas and each becomes an independent island. See <a href="https://github.com/">CONSISTENCY.md</a> for the full write-up.</p>
+
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 900 340" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#f87171"/>
+        </marker>
+        <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#4ade80"/>
+        </marker>
+      </defs>
+
+      <!-- BROKEN side -->
+      <text x="220" y="24" fill="#f87171" font-weight="700" font-size="14" text-anchor="middle" font-family="inherit">POC as-is with replicas: 2  →  BROKEN</text>
+      <rect class="pod-box" x="50" y="50" width="150" height="140"/>
+      <text class="pod-label" x="125" y="72">Pod A</text>
+      <text class="pod-inner" x="125" y="95">ConcurrentHashMap</text>
+      <text class="pod-inner" x="125" y="112">(cases A saw)</text>
+      <text class="pod-inner" x="125" y="140">synchronized(case)</text>
+      <text class="pod-inner" x="125" y="155">JVM-local lock</text>
+      <text class="pod-inner" x="125" y="180">retryScheduler</text>
+
+      <rect class="pod-box" x="240" y="50" width="150" height="140"/>
+      <text class="pod-label" x="315" y="72">Pod B</text>
+      <text class="pod-inner" x="315" y="95">ConcurrentHashMap</text>
+      <text class="pod-inner" x="315" y="112">(cases B saw)</text>
+      <text class="pod-inner" x="315" y="140">synchronized(case)</text>
+      <text class="pod-inner" x="315" y="155">JVM-local lock</text>
+      <text class="pod-inner" x="315" y="180">retryScheduler</text>
+
+      <text class="race" x="220" y="220">state invisible across pods · lock doesn't cross JVMs · retry dies with the pod</text>
+      <path class="arrow-broken" d="M 125 195 Q 220 250 315 195"/>
+      <text x="220" y="255" fill="#f87171" font-size="10" text-anchor="middle" font-family="inherit">cannot see each other</text>
+
+      <!-- Divider -->
+      <line x1="450" y1="30" x2="450" y2="330" stroke="#2b3555" stroke-dasharray="4 4"/>
+
+      <!-- FIXED side -->
+      <text x="680" y="24" fill="#4ade80" font-weight="700" font-size="14" text-anchor="middle" font-family="inherit">With moves 1-3 applied  →  correct</text>
+      <rect class="pod-box" x="510" y="50" width="130" height="120"/>
+      <text class="pod-label" x="575" y="72">Pod A</text>
+      <text class="pod-inner" x="575" y="92">stateless</text>
+      <text class="pod-inner" x="575" y="108">reads/writes via DB</text>
+      <text class="pod-inner" x="575" y="140">polls scheduler</text>
+      <text class="pod-inner" x="575" y="155">table SKIP LOCKED</text>
+
+      <rect class="pod-box" x="660" y="50" width="130" height="120"/>
+      <text class="pod-label" x="725" y="72">Pod B</text>
+      <text class="pod-inner" x="725" y="92">stateless</text>
+      <text class="pod-inner" x="725" y="108">reads/writes via DB</text>
+      <text class="pod-inner" x="725" y="140">polls scheduler</text>
+      <text class="pod-inner" x="725" y="155">table SKIP LOCKED</text>
+
+      <rect class="db-box" x="530" y="200" width="240" height="90"/>
+      <text class="pod-label" x="650" y="220">Oracle</text>
+      <text class="pod-inner" x="650" y="240">kyc_case (state, @Version)</text>
+      <text class="pod-inner" x="650" y="256">kyc_audit</text>
+      <text class="pod-inner" x="650" y="272">kyc_scheduled_work</text>
+
+      <path class="arrow-ok" d="M 575 170 L 620 200"/>
+      <path class="arrow-ok" d="M 725 170 L 680 200"/>
+      <text x="650" y="315" fill="#4ade80" font-size="11" text-anchor="middle" font-weight="600" font-family="inherit">CAS on @Version serializes writers · leases survive pod death</text>
+    </svg>
+    <div class="caption">Left: the POC deployed with N replicas — state is split across pod heaps, the <code>synchronized</code> block does nothing across JVMs, scheduled retries die with the pod. Right: after moving state to Oracle, replacing the monitor with a CAS on <code>@Version</code>, and swapping the local scheduler for a DB-polled timer with <code>SELECT … FOR UPDATE SKIP LOCKED</code>.</div>
+  </div>
+
+  <h3>The three moves, in order</h3>
+  <ol style="color: var(--ink-dim);">
+    <li><strong>Externalize state</strong> — JPA + Oracle with a <code>@Version</code> column.</li>
+    <li><strong>Externalize the lock</strong> — optimistic CAS on version, re-check legality on retry. (Pessimistic <code>SELECT … FOR UPDATE</code> and partitioned single-writer are alternatives.)</li>
+    <li><strong>Externalize the scheduler</strong> — a <code>kyc_scheduled_work</code> table polled with <code>SKIP LOCKED</code>, or a durable engine (Temporal / Quartz-JDBC).</li>
+  </ol>
+  <p style="color: var(--warn);"><b>Ordering matters.</b> Skipping move 2 after move 1 (sharing state without a cross-pod lock) is the classic way to ship a subtly broken workflow.</p>
+</section>
+
+<!-- ============ 8. Tech debt ============ -->
+<section id="debt">
+  <h2>8. Tech debt we are consciously carrying</h2>
+  <table>
+    <thead><tr><th style="width: 40%;">POC choice</th><th>Production fix</th><th>Severity</th></tr></thead>
+    <tbody>
+      <tr><td>In-memory <code>ConcurrentHashMap</code></td><td>JPA + Oracle with <code>@Version</code></td><td><span class="pill err">critical</span></td></tr>
+      <tr><td><code>synchronized(kycCase)</code> — JVM-local</td><td>Optimistic CAS on version + legality re-check</td><td><span class="pill err">critical</span></td></tr>
+      <tr><td>Local <code>ScheduledExecutorService</code></td><td>DB-polled timer or durable engine (Temporal)</td><td><span class="pill err">critical</span></td></tr>
+      <tr><td>DLQ in a <code>ConcurrentHashMap</code></td><td>Kafka DLQ topic or <code>dlq_entries</code> table</td><td><span class="pill warn">high</span></td></tr>
+      <tr><td>No idempotency keys on outbound</td><td><code>Idempotency-Key</code> = <code>caseId:step:attempt</code></td><td><span class="pill warn">high</span></td></tr>
+      <tr><td>Poison vs. transient not distinguished</td><td>Classify errors at boundary; skip retry on <code>TERMINAL</code></td><td><span class="pill warn">high</span></td></tr>
+      <tr><td>No authentication</td><td>VN-ID JWT filter on controllers</td><td><span class="pill warn">high</span></td></tr>
+      <tr><td>2 s poll from UI</td><td>SSE / WebSocket push</td><td><span class="pill dim">medium</span></td></tr>
+      <tr><td>Mock OCR / address services</td><td>Real clients + Resilience4j circuit breaker</td><td><span class="pill dim">medium</span></td></tr>
+      <tr><td>No metrics / traces</td><td>Micrometer + Grafana dashboard</td><td><span class="pill dim">medium</span></td></tr>
+      <tr><td>Audit log on the aggregate</td><td>Separate <code>audit_entries</code> table, loaded on demand</td><td><span class="pill dim">low</span></td></tr>
+      <tr><td>Reviewer identity is free-text</td><td>Derive from JWT</td><td><span class="pill dim">low</span></td></tr>
+      <tr><td><code>REPLAY_FROM_DLQ</code> always → <code>ID_UPLOADED</code></td><td>Resume point encoded in the DLQ entry</td><td><span class="pill dim">low</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+
+<footer>
+  <div>KYC Workflow POC · Spring Boot 3.4 / Java 21 · See <a href="/">the live UI</a>, <code>ISSUE.md</code>, <code>TECHNICAL.md</code>, <code>CONSISTENCY.md</code>.</div>
+</footer>
+
+<script>
+  // ============ Interactive state machine ============
+  // Mirror of KycStateMachine.buildTransitionTable
+  const TRANSITIONS = {
+    "REGISTERED": { "UPLOAD_ID": "ID_UPLOADED" },
+    "ID_UPLOADED": { "START_OCR": "OCR_IN_PROGRESS" },
+    "OCR_IN_PROGRESS": { "OCR_SUCCESS": "OCR_COMPLETED", "OCR_FAILURE": "OCR_FAILED" },
+    "OCR_FAILED": { "RETRY": "OCR_IN_PROGRESS", "MOVE_TO_DLQ": "DEAD_LETTER" },
+    "OCR_COMPLETED": { "START_ADDRESS_VERIFY": "ADDRESS_VERIFICATION_IN_PROGRESS" },
+    "ADDRESS_VERIFICATION_IN_PROGRESS": { "ADDRESS_VERIFY_SUCCESS": "ADDRESS_VERIFIED", "ADDRESS_VERIFY_FAILURE": "ADDRESS_VERIFICATION_FAILED" },
+    "ADDRESS_VERIFICATION_FAILED": { "RETRY": "ADDRESS_VERIFICATION_IN_PROGRESS", "MOVE_TO_DLQ": "DEAD_LETTER" },
+    "ADDRESS_VERIFIED": { "SEND_TO_MANUAL_REVIEW": "PENDING_MANUAL_REVIEW" },
+    "PENDING_MANUAL_REVIEW": { "MANUAL_APPROVE": "APPROVED", "MANUAL_REJECT": "REJECTED" },
+    "DEAD_LETTER": { "REPLAY_FROM_DLQ": "ID_UPLOADED" },
+    "APPROVED": {},
+    "REJECTED": {}
+  };
+  // For UX, offer *all* events on every state so users can experience the rejection.
+  const ALL_EVENTS = [
+    "UPLOAD_ID","START_OCR","OCR_SUCCESS","OCR_FAILURE","RETRY","MOVE_TO_DLQ",
+    "START_ADDRESS_VERIFY","ADDRESS_VERIFY_SUCCESS","ADDRESS_VERIFY_FAILURE",
+    "SEND_TO_MANUAL_REVIEW","MANUAL_APPROVE","MANUAL_REJECT","REPLAY_FROM_DLQ"
+  ];
+
+  const state = { current: "REGISTERED", log: [] };
+  const svg = document.getElementById("sm-svg");
+  const curStateEl = document.getElementById("cur-state");
+  const btnRow = document.getElementById("event-buttons");
+  const logEl = document.getElementById("audit-log");
+
+  function updateSvgHighlight() {
+    svg.querySelectorAll(".sm-node").forEach(n => n.classList.remove("active"));
+    const el = document.getElementById("n-" + state.current);
+    if (el) el.classList.add("active");
+  }
+
+  function renderButtons() {
+    btnRow.innerHTML = "";
+    const legal = TRANSITIONS[state.current] || {};
+    ALL_EVENTS.forEach(evt => {
+      const btn = document.createElement("button");
+      btn.textContent = evt;
+      const isLegal = evt in legal;
+      if (isLegal) {
+        btn.classList.add("primary");
+        btn.title = "Legal: " + state.current + " --(" + evt + ")--> " + legal[evt];
+      } else {
+        btn.title = "Illegal from " + state.current + " (will be rejected)";
+      }
+      btn.onclick = () => fire(evt);
+      // Only show legal + a couple of tempting-illegal ones would clutter; show all if terminal has none
+      // For clarity we always render all events so users can see rejection.
+      btnRow.appendChild(btn);
+    });
+  }
+
+  function appendLog(from, to, event, actor, detail, illegal) {
+    const row = document.createElement("div");
+    row.className = "row";
+    if (illegal) {
+      row.innerHTML = `<span style="color: var(--err);">✕ REJECTED</span> — event <span class="event">${event}</span> is not legal from <span class="from">${from}</span>
+        <span class="detail">→ IllegalTransitionException (HTTP 409)</span>`;
+    } else {
+      row.innerHTML = `<span class="from">${from}</span> —(<span class="event">${event}</span>)→ <span class="to">${to}</span>
+        <span class="actor">by ${actor}</span>
+        <span class="detail">${detail}</span>`;
+    }
+    logEl.insertBefore(row, logEl.firstChild);
+  }
+
+  function fire(event) {
+    const legal = TRANSITIONS[state.current] || {};
+    if (!(event in legal)) {
+      appendLog(state.current, null, event, "user", null, true);
+      return;
+    }
+    const to = legal[event];
+    const actor = event === "RETRY" ? "retry-scheduler"
+                : event.startsWith("MANUAL_") ? "reviewer"
+                : event === "REPLAY_FROM_DLQ" ? "admin"
+                : event.startsWith("OCR_") ? "ocr-service"
+                : event.startsWith("ADDRESS_") ? "address-service"
+                : "system";
+    const detail = event === "UPLOAD_ID" ? "id-front.jpg → s3://kyc-poc/…"
+                 : event === "OCR_SUCCESS" ? "confidence=0.92 idNumber=079123456789"
+                 : event === "OCR_FAILURE" ? "provider returned HTTP 503"
+                 : event === "ADDRESS_VERIFY_SUCCESS" ? "matched=true score=0.87"
+                 : event === "ADDRESS_VERIFY_FAILURE" ? "no address found for postal code"
+                 : event === "MOVE_TO_DLQ" ? "exhausted retry budget"
+                 : event === "REPLAY_FROM_DLQ" ? "reset attempts to 0"
+                 : "";
+    appendLog(state.current, to, event, actor, detail, false);
+    state.current = to;
+    curStateEl.textContent = to;
+    updateSvgHighlight();
+    renderButtons();
+  }
+
+  document.getElementById("reset-btn").onclick = () => {
+    state.current = "REGISTERED";
+    curStateEl.textContent = "REGISTERED";
+    logEl.innerHTML = "";
+    updateSvgHighlight();
+    renderButtons();
+  };
+
+  updateSvgHighlight();
+  renderButtons();
+</script>
+
+</body>
+</html>

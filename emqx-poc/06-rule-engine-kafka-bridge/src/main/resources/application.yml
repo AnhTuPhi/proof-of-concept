@@ -1,0 +1,23 @@
+server:
+  port: 8106
+
+spring:
+  application.name: poc-06-rule-engine-kafka-bridge
+  datasource:
+    url: jdbc:postgresql://localhost:5432/emqx
+    username: emqx
+    password: emqx_pass
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      auto-offset-reset: earliest
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+emqx:
+  mgmt-url: http://localhost:18083/api/v5
+  mgmt-user: admin
+  mgmt-pass: public
+
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

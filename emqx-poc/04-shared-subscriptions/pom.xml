@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.claude.emqx</groupId>
+        <artifactId>emqx-production-patterns-poc</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>poc-04-shared-subscriptions</artifactId>
+    <name>POC 04 - Shared Subscriptions</name>
+    <description>$share/group/topic for Kafka-style consumer-group semantics on MQTT.</description>
+
+    <dependencies>
+        <dependency><groupId>com.claude.emqx</groupId><artifactId>common</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>org.eclipse.paho</groupId><artifactId>org.eclipse.paho.mqttv5.client</artifactId></dependency>
+    </dependencies>
+    <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+</project>

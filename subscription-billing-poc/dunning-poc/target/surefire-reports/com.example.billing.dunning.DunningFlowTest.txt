@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.example.billing.dunning.DunningFlowTest
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.214 s -- in com.example.billing.dunning.DunningFlowTest

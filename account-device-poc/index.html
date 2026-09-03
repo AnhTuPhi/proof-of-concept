@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Auth & Access POC Suite</title>
+<style>
+  :root { --bg:#0f1318; --panel:#151b22; --line:#222b34; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --warn:#d29922; --bad:#f85149; --good:#3fb950; }
+  *{box-sizing:border-box} html,body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+  header{padding:32px 24px;border-bottom:1px solid var(--line)}
+  h1{margin:0 0 8px;font-size:24px}
+  .sub{color:var(--muted);font-size:14px}
+  main{max-width:980px;margin:0 auto;padding:24px}
+  .grid{display:grid;grid-template-columns:1fr;gap:16px}
+  @media(min-width:780px){.grid{grid-template-columns:1fr 1fr 1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column}
+  .card h2{font-size:17px;margin:0 0 6px}
+  .card .tag{display:inline-block;font-size:11px;color:var(--muted);background:#1e252d;padding:2px 8px;border-radius:99px;margin-bottom:10px;width:fit-content}
+  .card p{color:var(--muted);font-size:14px;margin:0 0 14px;flex:1}
+  .card a{display:inline-block;background:#1f6feb;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;font-size:14px;width:fit-content}
+  .card a:hover{background:#388bfd}
+  .why{margin-top:32px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;font-size:13.5px;color:var(--muted)}
+  .why h3{color:var(--text);margin:0 0 8px;font-size:14px}
+  code{background:#1e252d;padding:1px 6px;border-radius:4px;color:#d2a8ff;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Auth &amp; Access POC Suite</h1>
+  <div class="sub">Three gnarly auth patterns made small enough to demo end-to-end. Java 21 / Spring Boot 3.4.3.</div>
+</header>
+<main>
+  <div class="grid">
+    <div class="card">
+      <h2>28 · Account Merge</h2>
+      <span class="tag">port 8081</span>
+      <p>User signed up via Google two years ago, forgot, and just signed up again with email. Merge their data across N tables without hard-deleting either user — both auth methods keep working.</p>
+      <a href="http://localhost:8081/account-merge.html">Open demo →</a>
+    </div>
+    <div class="card">
+      <h2>29 · Multi-Device Sessions</h2>
+      <span class="tag">port 8082</span>
+      <p>Phone, laptop, and tablet all logged in. User changes password — every in-flight JWT becomes invalid instantly via token-version bumping. Refresh tokens rotate on every use.</p>
+      <a href="http://localhost:8082/session.html">Open demo →</a>
+    </div>
+    <div class="card">
+      <h2>30 · Tiered Rate Limiting</h2>
+      <span class="tag">port 8083</span>
+      <p>Token-bucket limits per tier (Free / Pro / Enterprise). Three independent dimensions — user, IP, endpoint. 429 with <code>Retry-After</code> when any dimension trips.</p>
+      <a href="http://localhost:8083/rate-limit.html">Open demo →</a>
+    </div>
+  </div>
+
+  <div class="why">
+    <h3>Understand it first</h3>
+    New here? Start with the <a href="architecture.html" style="color:var(--accent)">visual explainer (architecture.html)</a> —
+    flow diagrams and key-tech breakdowns for all three POCs, plus scaling. Narrative docs:
+    <a href="ISSUE.md" style="color:var(--accent)">ISSUE.md</a>,
+    <a href="TECHNICAL.md" style="color:var(--accent)">TECHNICAL.md</a>,
+    <a href="CONSISTENCY.md" style="color:var(--accent)">CONSISTENCY.md</a>.
+  </div>
+
+  <div class="why">
+    <h3>Running the suite</h3>
+    From <code>D:\Claude\poc-demos</code>, build the parent and start each module in its own terminal:
+    <pre style="color:var(--text);background:#0a0d11;padding:12px;border-radius:6px;overflow-x:auto"><code style="color:inherit;background:none;padding:0">mvn -q clean install -DskipTests
+mvn -q -pl account-merge-poc       spring-boot:run
+mvn -q -pl session-management-poc  spring-boot:run
+mvn -q -pl tiered-rate-limit-poc   spring-boot:run</code></pre>
+    Then open <code>http://localhost:8081/account-merge.html</code> (or the other two). Each module exposes its own static HTML; you can also open this hub file directly via <code>file://</code>.
+  </div>
+</main>
+</body>
+</html>

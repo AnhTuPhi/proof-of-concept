@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tiered Rate Limit POC</title>
+<style>
+  :root { --bg:#0f1318; --panel:#151b22; --panel2:#1c232c; --line:#222b34; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --warn:#d29922; --bad:#f85149; --good:#3fb950; --purple:#bc8cff; }
+  *{box-sizing:border-box} html,body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:14px}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  h1{margin:0;font-size:18px} .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  main{padding:20px;max-width:1280px;margin:0 auto}
+  .row{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+  @media(min-width:900px){.row.two{grid-template-columns:1fr 1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .panel h2{margin:0 0 10px;font-size:14px;color:var(--accent)}
+  .btn{background:#1f6feb;color:#fff;border:0;padding:6px 11px;border-radius:5px;cursor:pointer;font-size:13px;margin-right:5px;margin-top:5px}
+  .btn:hover{background:#388bfd}
+  .btn.ghost{background:#2a313a;color:var(--text)} .btn.ghost:hover{background:#3a424c}
+  .btn.danger{background:#a4252e} .btn.danger:hover{background:#cf3e48}
+  .userpick{display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap}
+  .userpick label{cursor:pointer;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);font-size:13px}
+  .userpick label.sel{border-color:var(--accent);background:#0d1e30}
+  .endpoint-row{display:flex;gap:6px;align-items:center;margin:8px 0;flex-wrap:wrap}
+  .endpoint-row input,.endpoint-row select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:5px 7px;border-radius:4px;font-size:12.5px;font-family:inherit}
+  .dim{display:grid;grid-template-columns:90px 1fr 90px;gap:10px;align-items:center;padding:6px 0;font-size:13px}
+  .dim .dimname{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:0.5px}
+  .bar{height:14px;background:var(--bg);border:1px solid var(--line);border-radius:99px;overflow:hidden;position:relative}
+  .bar-fill{height:100%;background:linear-gradient(90deg,#3fb950,#388bfd);transition:width 0.2s}
+  .bar.low .bar-fill{background:linear-gradient(90deg,#d29922,#f85149)}
+  .bar.zero .bar-fill{background:#f85149}
+  .bar-text{position:absolute;top:0;left:0;right:0;text-align:center;line-height:14px;font-size:11px;color:#fff;mix-blend-mode:difference}
+  .log{height:260px;overflow-y:auto;background:#0a0d11;border:1px solid var(--line);border-radius:6px;padding:8px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;display:flex;flex-direction:column-reverse}
+  .log .line{padding:2px 0;border-bottom:1px dashed #1a2028}
+  .log .line.ok{color:var(--good)}
+  .log .line.fail{color:var(--bad)}
+  .log .line .ts{color:var(--muted);margin-right:6px}
+  .stat{font-size:12.5px;color:var(--muted);margin-top:6px;font-family:ui-monospace,Consolas,monospace}
+  .why{color:var(--muted);font-size:12.5px;margin-top:6px}
+  .why code{background:#1e252d;padding:1px 5px;border-radius:3px;color:#d2a8ff;font-size:11.5px}
+  .tier-badge{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;margin-left:4px}
+  .tier-badge.FREE{background:#2d2616;color:var(--warn)}
+  .tier-badge.PRO{background:#1d2a3a;color:var(--accent)}
+  .tier-badge.ENTERPRISE{background:#1f1530;color:var(--purple)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>POC 30 · Tiered Rate Limiting</h1>
+    <div class="sub">Token bucket × 3 dimensions (user, IP, endpoint). 429 with <code>Retry-After</code>.</div>
+  </div>
+  <div>
+    <button class="btn ghost" onclick="reset()">↻ Reset all buckets</button>
+  </div>
+</header>
+<main>
+
+<div class="row two">
+  <div class="panel">
+    <h2>1 · Pick user & tier</h2>
+    <div class="userpick" id="users"></div>
+    <div class="why">
+      Tiers map to (capacity, refill). For the demo:
+      <ul style="margin:4px 0 0 18px;padding:0">
+        <li><b>FREE</b> — 20 req / 60s, burst 20</li>
+        <li><b>PRO</b> — 120 req / 60s</li>
+        <li><b>ENTERPRISE</b> — 600 req / 60s (soft cap, still throttled at the per-IP layer)</li>
+      </ul>
+      <p>Refill is lazy — on each read, tokens are added proportional to elapsed time. A sliding window in disguise.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>2 · Fire requests</h2>
+    <div class="endpoint-row">
+      <span class="sub">endpoint:</span>
+      <select id="endpoint">
+        <option>/api/quote</option>
+        <option>/api/order</option>
+        <option>/api/portfolio</option>
+      </select>
+      <span class="sub">ip:</span>
+      <input id="ip" value="10.0.0.42" style="width:120px">
+    </div>
+    <div>
+      <button class="btn" onclick="fire(1)">1×</button>
+      <button class="btn" onclick="fire(10)">10×</button>
+      <button class="btn" onclick="fire(50)">50× burst</button>
+      <button class="btn danger" onclick="fire(500)">500× DDoS</button>
+    </div>
+    <div class="stat" id="stat">no requests yet</div>
+    <div class="why">Three independent buckets are checked. If any of them is empty, you get 429 — the response tells you which dimension tripped so the caller can back off appropriately.</div>
+  </div>
+</div>
+
+<div class="row two">
+  <div class="panel">
+    <h2>3 · Live bucket state</h2>
+    <div id="dims">
+      <div class="dim"><span class="dimname">user</span><div class="bar"><div class="bar-fill" id="bar-user" style="width:100%"></div><div class="bar-text" id="text-user">—</div></div><span class="sub" id="lbl-user">—</span></div>
+      <div class="dim"><span class="dimname">ip</span><div class="bar"><div class="bar-fill" id="bar-ip" style="width:100%"></div><div class="bar-text" id="text-ip">—</div></div><span class="sub" id="lbl-ip">—</span></div>
+      <div class="dim"><span class="dimname">endpoint</span><div class="bar"><div class="bar-fill" id="bar-endpoint" style="width:100%"></div><div class="bar-text" id="text-endpoint">—</div></div><span class="sub" id="lbl-endpoint">—</span></div>
+    </div>
+    <div class="why" style="margin-top:14px">
+      <b>Why three dimensions?</b><br>
+      • <code>user</code> bucket — fair share per account, sized to tier<br>
+      • <code>ip</code> bucket — catches NAT'd traffic / abuse from one origin<br>
+      • <code>endpoint</code> bucket — soft cap to protect a single hot path from a stampede<br>
+      Any one trips → 429. Keeping them separate stops one hot endpoint from burning a user's whole quota.
+    </div>
+  </div>
+  <div class="panel">
+    <h2>4 · Request log</h2>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+</main>
+<script>
+const API = '/api/ratelimit';
+let currentUser = 'free-user';
+let tiers = ['FREE','PRO','ENTERPRISE'];
+
+async function loadUsers() {
+  const users = await fetch(`${API}/users`).then(r => r.json());
+  const wrap = document.getElementById('users');
+  wrap.innerHTML = '';
+  users.forEach(u => {
+    const lab = document.createElement('label');
+    lab.className = u.userId === currentUser ? 'sel' : '';
+    lab.innerHTML = `<input type="radio" name="u" value="${u.userId}" ${u.userId===currentUser?'checked':''} style="display:none">
+      <b>${u.userId}</b> <span class="tier-badge ${u.tier}">${u.tier}</span>
+      <span class="sub" style="margin-left:4px">cap ${u.capacity}, remaining ${u.remaining}</span>`;
+    lab.onclick = () => { currentUser = u.userId; loadUsers(); };
+    wrap.appendChild(lab);
+  });
+  // Tier selector for current user
+  const tierBox = document.createElement('div');
+  tierBox.style.marginTop = '8px';
+  tierBox.innerHTML = `<span class="sub">change tier for <b>${currentUser}</b>:</span> ` +
+    tiers.map(t => `<button class="btn ghost" onclick="setTier('${t}')">${t}</button>`).join('');
+  wrap.appendChild(tierBox);
+}
+
+async function setTier(tier) {
+  await fetch(`${API}/tier`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({userId: currentUser, tier})});
+  loadUsers();
+}
+
+async function fire(n) {
+  const endpoint = document.getElementById('endpoint').value;
+  const ip = document.getElementById('ip').value || '127.0.0.1';
+  let allowed = 0, denied = 0;
+  for (let i = 0; i < n; i++) {
+    const r = await fetch(`${API}/call`, {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({userId: currentUser, ip, endpoint})});
+    const body = await r.json();
+    if (r.ok) { allowed++; } else { denied++; }
+    if (i === n - 1) {
+      paintDims(body.decision);
+      addLog(r.ok, body, currentUser, endpoint, ip);
+    } else if (i % Math.max(1, Math.floor(n/8)) === 0) {
+      addLog(r.ok, body, currentUser, endpoint, ip);
+    }
+  }
+  document.getElementById('stat').textContent = `${n} fired · ${allowed} allowed · ${denied} → 429`;
+  loadUsers();
+}
+
+function paintDims(d) {
+  for (const dim of d.dimensions) {
+    const pct = (dim.remaining / dim.capacity) * 100;
+    const bar = document.getElementById('bar-' + dim.dimension);
+    const txt = document.getElementById('text-' + dim.dimension);
+    const lbl = document.getElementById('lbl-' + dim.dimension);
+    bar.style.width = pct + '%';
+    const parent = bar.parentElement;
+    parent.classList.toggle('low', pct > 0 && pct < 25);
+    parent.classList.toggle('zero', pct === 0);
+    txt.textContent = `${dim.remaining} / ${dim.capacity}`;
+    lbl.textContent = `${dim.tier} · ${dim.key}`;
+  }
+}
+
+function addLog(ok, body, uid, ep, ip) {
+  const log = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'line ' + (ok ? 'ok' : 'fail');
+  const ts = new Date().toLocaleTimeString();
+  if (ok) {
+    line.innerHTML = `<span class="ts">${ts}</span>200 · ${uid} → ${ep}`;
+  } else {
+    line.innerHTML = `<span class="ts">${ts}</span>429 · ${uid} → ${ep} · violated=<b>${escape(body.decision.violatedDimension)}</b> · retry-after=${body.retryAfterSeconds}s`;
+  }
+  log.insertBefore(line, log.firstChild);
+  while (log.children.length > 80) log.removeChild(log.lastChild);
+}
+
+async function reset() {
+  await fetch(`${API}/reset`, {method:'POST'});
+  document.getElementById('log').innerHTML = '';
+  document.getElementById('stat').textContent = 'reset';
+  loadUsers();
+  ['user','ip','endpoint'].forEach(d => {
+    document.getElementById('bar-' + d).style.width = '100%';
+    document.getElementById('text-' + d).textContent = '—';
+    document.getElementById('lbl-' + d).textContent = '—';
+    document.getElementById('bar-' + d).parentElement.classList.remove('low','zero');
+  });
+}
+
+function escape(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+loadUsers();
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+server:
+  port: 8111
+
+spring:
+  application.name: poc-11-device-shadow
+  datasource:
+    url: jdbc:postgresql://localhost:5432/emqx
+    username: emqx
+    password: emqx_pass
+
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: shadow-svc
+  username: backend-svc
+  password: backend-secret
+  # CRITICAL for a shadow service: clean-start=false + non-zero expiry.
+  # If the shadow service restarts, it MUST resume the queued shadow/update
+  # messages devices sent while it was down. Otherwise we lose state changes
+  # and the delta will silently drift from reality.
+  clean-session: false
+  session-expiry-interval: 86400
+  keep-alive-seconds: 30
+  connection-timeout-seconds: 10
+  max-inflight: 200
+  automatic-reconnect: true
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

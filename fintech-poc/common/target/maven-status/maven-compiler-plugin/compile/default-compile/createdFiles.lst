@@ -1,0 +1,3 @@
+com\example\fintech\common\Currency.class
+com\example\fintech\common\Money.class
+com\example\fintech\common\IdempotencyHasher.class

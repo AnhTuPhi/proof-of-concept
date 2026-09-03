@@ -1,0 +1,48 @@
+# Prometheus scrape config covering:
+#   - EMQX nodes (built-in /api/v5/prometheus/stats endpoint on the dashboard port)
+#   - Each Spring Boot POC app (Micrometer /actuator/prometheus)
+#   - HAProxy (built-in /metrics on 8404)
+#
+# The EMQX scrape interval is intentionally short (5s). EMQX surfaces
+# per-second metrics (messages/in, messages/out, connections), and the
+# Grafana dashboards we ship lose detail at 15s.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+
+  - job_name: 'emqx'
+    metrics_path: /api/v5/prometheus/stats
+    static_configs:
+      - targets:
+          - 'emqx1.emqx.io:18083'
+          - 'emqx2.emqx.io:18083'
+          - 'emqx3.emqx.io:18083'
+
+  - job_name: 'spring-poc-apps'
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # Listed targets are populated when you docker compose up each POC app
+      # via host networking. Update as needed for your dev environment.
+      - targets:
+          - 'host.docker.internal:8101'  # POC 01
+          - 'host.docker.internal:8102'  # POC 02
+          - 'host.docker.internal:8103'  # POC 03
+          - 'host.docker.internal:8104'  # POC 04
+          - 'host.docker.internal:8105'  # POC 05
+          - 'host.docker.internal:8106'  # POC 06
+          - 'host.docker.internal:8107'  # POC 07
+          - 'host.docker.internal:8108'  # POC 08
+          - 'host.docker.internal:8109'  # POC 09
+          - 'host.docker.internal:8110'  # POC 10
+          - 'host.docker.internal:8111'  # POC 11
+          - 'host.docker.internal:8112'  # POC 12
+          - 'host.docker.internal:8113'  # POC 13
+          - 'host.docker.internal:8114'  # POC 14
+
+  - job_name: 'haproxy'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['haproxy:8404']

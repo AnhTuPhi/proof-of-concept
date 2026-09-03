@@ -1,0 +1,5 @@
+# Created at 2026-06-17T11:13:20.065
+Boot Manifest-JAR contains absolute paths in classpath 'D:\Claude\fintech-poc\reconciliation-poc\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

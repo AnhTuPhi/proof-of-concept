@@ -1,0 +1,11 @@
+com\example\fintech\fx\FxController.class
+com\example\fintech\fx\FxService$RefundResult.class
+com\example\fintech\fx\FxPnlEntryRepository.class
+com\example\fintech\fx\FxPaymentRepository.class
+com\example\fintech\fx\FxPnlEntry.class
+com\example\fintech\fx\FxService.class
+com\example\fintech\fx\FxApplication.class
+com\example\fintech\fx\FxPayment.class
+com\example\fintech\fx\FxQuoteRepository.class
+com\example\fintech\fx\FxRateProvider.class
+com\example\fintech\fx\FxQuote.class

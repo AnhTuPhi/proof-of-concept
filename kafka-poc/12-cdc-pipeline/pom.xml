@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.claude.kafka</groupId>
+        <artifactId>kafka-production-patterns-poc</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    <artifactId>cdc-pipeline</artifactId>
+    <packaging>pom</packaging>
+    <name>12 - CDC Pipeline (Connect configs)</name>
+    <description>This module has no Java - it's the Debezium + ES sink configs and registration scripts.</description>
+</project>

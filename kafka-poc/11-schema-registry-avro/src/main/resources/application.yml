@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: schema-registry-avro-poc
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+
+app:
+  schema-registry:
+    url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+    auto-register: ${SCHEMA_AUTO_REGISTER:true}
+
+server:
+  port: 8111
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}

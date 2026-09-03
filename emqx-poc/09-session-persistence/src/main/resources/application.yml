@@ -1,0 +1,19 @@
+server:
+  port: 8109
+spring:
+  application.name: poc-09-session-persistence
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: session-poc
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 30
+  connection-timeout-seconds: 10
+  max-inflight: 50
+  automatic-reconnect: false
+  tls:
+    enabled: false
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

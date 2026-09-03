@@ -1,0 +1,23 @@
+server:
+  port: 8102
+
+spring:
+  application:
+    name: poc-02-connection-storm
+
+mqtt:
+  broker-url: tcp://localhost:1880
+  client-id-prefix: storm-client
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 30
+  connection-timeout-seconds: 30
+  max-inflight: 10
+  automatic-reconnect: false           # IMPORTANT: we own the reconnect loop here
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,info,metrics

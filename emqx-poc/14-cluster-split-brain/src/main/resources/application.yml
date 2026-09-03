@@ -1,0 +1,33 @@
+server:
+  port: 8114
+
+spring:
+  application.name: poc-14-cluster-split-brain
+
+# Per-node MQTT endpoints (bypass HAProxy on purpose - we want to talk
+# to each node directly so we can detect split-brain).
+cluster:
+  nodes: tcp://localhost:1883,tcp://localhost:1884,tcp://localhost:1885
+  mgmt-urls: http://localhost:18083,http://localhost:18084,http://localhost:18085
+  mgmt-user: admin
+  mgmt-pass: public
+  mqtt-username: backend-svc
+  mqtt-password: backend-secret
+
+# Dummy mqtt block to satisfy MqttClientProperties binding (unused by the probe).
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: cluster-probe
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 30
+  connection-timeout-seconds: 5
+  max-inflight: 100
+  automatic-reconnect: false
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

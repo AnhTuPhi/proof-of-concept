@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>cdc-outbox-poc — flow &amp; key tech</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e2230;
+    --ink: #e8ecf1;
+    --ink-dim: #9aa4b2;
+    --line: #2b3040;
+    --accent: #6ea8fe;
+    --accent-2: #b18cff;
+    --ok: #58d68d;
+    --warn: #f5b041;
+    --err: #e77373;
+    --producer: #58d68d;
+    --cdc:      #b18cff;
+    --consumer: #f5b041;
+    --shared:   #6ea8fe;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    padding: 28px 32px 8px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #1a1e2a 0%, var(--bg) 100%);
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    letter-spacing: 0.2px;
+  }
+  header p { margin: 0; color: var(--ink-dim); font-size: 14px; }
+  main { padding: 24px 32px 64px; max-width: 1200px; margin: 0 auto; }
+  section { margin-bottom: 36px; }
+  h2 {
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { font-size: 15px; margin: 0 0 6px; color: var(--ink); }
+  p { margin: 0 0 10px; }
+  code, .code {
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #ffdca8;
+  }
+  .diagram {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    margin: 14px 0 0; padding: 0; list-style: none;
+    font-size: 12.5px; color: var(--ink-dim);
+  }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch {
+    width: 12px; height: 12px; border-radius: 3px; display: inline-block;
+  }
+  .grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card .tag {
+    display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 8px;
+    background: var(--panel-2); color: var(--ink-dim);
+  }
+  .card .tag.producer { color: var(--producer); border: 1px solid rgba(88,214,141,0.4); }
+  .card .tag.cdc      { color: var(--cdc);      border: 1px solid rgba(177,140,255,0.4); }
+  .card .tag.consumer { color: var(--consumer); border: 1px solid rgba(245,176,65,0.4); }
+  .card .tag.shared   { color: var(--shared);   border: 1px solid rgba(110,168,254,0.4); }
+  .card ul { padding-left: 18px; margin: 8px 0 0; }
+  .card li { margin-bottom: 4px; color: var(--ink); }
+  .card .muted { color: var(--ink-dim); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-dim); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .callout {
+    background: linear-gradient(180deg, rgba(110,168,254,0.08), rgba(110,168,254,0.02));
+    border: 1px solid rgba(110,168,254,0.25);
+    padding: 12px 16px; border-radius: 10px; margin-top: 16px;
+    color: var(--ink); font-size: 13.5px;
+  }
+  .callout b { color: var(--accent); }
+  footer {
+    color: var(--ink-dim); font-size: 12.5px; text-align: center;
+    padding: 24px 0 8px; border-top: 1px solid var(--line);
+  }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tabs button {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    font-size: 12.5px;
+    letter-spacing: 0.4px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.15s ease all;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.active {
+    background: var(--panel-2);
+    color: var(--ink);
+    border-color: var(--accent);
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cdc-outbox-poc — flow &amp; key tech</h1>
+  <p>Standalone visual companion to <a href="../ISSUE.md">ISSUE.md</a>, <a href="../TECHNICAL.md">TECHNICAL.md</a>, and <a href="../CONSISTENCY.md">CONSISTENCY.md</a>.</p>
+</header>
+
+<main>
+
+<section>
+  <h2>End-to-end flow</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1120 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="cdc outbox flow">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#6ea8fe"/>
+        </marker>
+        <marker id="arrowMuted" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#5a6478"/>
+        </marker>
+        <style>
+          .box   { fill:#1e2230; stroke:#2b3040; stroke-width:1; rx:8; ry:8; }
+          .boxL  { fill:#242938; stroke:#3a4256; }
+          .prod  { fill:#1a2a20; stroke:#58d68d; }
+          .cdc   { fill:#231e30; stroke:#b18cff; }
+          .cons  { fill:#2b2418; stroke:#f5b041; }
+          .writer{ fill:#1e2632; stroke:#6ea8fe; }
+          .title { font: 600 13px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#e8ecf1; }
+          .sub   { font: 500 11.5px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#9aa4b2; }
+          .tiny  { font: 500 10.5px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#9aa4b2; }
+          .flow  { stroke:#6ea8fe; stroke-width:1.6; fill:none; }
+          .muted { stroke:#5a6478; stroke-width:1.2; fill:none; stroke-dasharray:4 3; }
+          .headL { font: 600 12px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#9aa4b2; letter-spacing:1.5px; }
+        </style>
+      </defs>
+
+      <text x="40" y="30" class="headL">1 · CLIENT</text>
+      <rect x="30" y="46" width="220" height="70" class="box"/>
+      <text x="46" y="72" class="title">POST /api/orders</text>
+      <text x="46" y="90" class="sub">OrderController</text>
+      <text x="46" y="106" class="sub">returns 201 + orderId</text>
+
+      <text x="290" y="30" class="headL">2 · PRODUCER  (@Transactional)</text>
+      <rect x="280" y="46" width="800" height="70" class="prod"/>
+      <text x="296" y="72" class="title">OrderService.createOrder — one DB commit for both rows</text>
+      <text x="296" y="90" class="sub">1) orderRepository.save(order)                     → orders row</text>
+      <text x="296" y="106" class="sub">2) outboxPublisher.publish(...)                     → outbox_events row  (no Kafka in this JVM)</text>
+
+      <path d="M250,81 L280,81" class="flow" marker-end="url(#arrow)"/>
+
+      <text x="40" y="150" class="headL">3 · POSTGRES  (source of truth)</text>
+      <rect x="30" y="166" width="1050" height="80" class="boxL"/>
+      <text x="46" y="192" class="title">Postgres 16 · wal_level=logical · REPLICA IDENTITY FULL on outbox_events</text>
+      <text x="46" y="212" class="sub">orders — business state    ·    outbox_events — event contract (id, aggregate_type, aggregate_id, event_type, payload, created_at)</text>
+      <text x="46" y="232" class="sub">Every commit writes to the WAL — that's the only communication channel between producer and CDC.</text>
+
+      <path d="M680,116 L680,166" class="flow" marker-end="url(#arrow)"/>
+
+      <text x="40" y="276" class="headL">4 · CDC  (Debezium + Outbox Event Router SMT)</text>
+      <rect x="30" y="292" width="510" height="120" class="cdc"/>
+      <text x="46" y="318" class="title">Debezium Connect — PostgresConnector + pgoutput</text>
+      <text x="46" y="338" class="sub">Reads the WAL via replication slot <code>debezium_order_outbox</code>.</text>
+      <text x="46" y="356" class="sub">Only outbox_events INSERTs; heartbeat every 10s to keep slot alive.</text>
+      <text x="46" y="374" class="sub">EventRouter SMT: key = aggregate_id · topic = outbox.event.${aggregate_type}</text>
+      <text x="46" y="392" class="sub">Payload column expanded as message value; row UUID → "id" header.</text>
+
+      <rect x="560" y="292" width="520" height="120" class="boxL"/>
+      <text x="576" y="318" class="title">Kafka topic  outbox.event.Order</text>
+      <text x="576" y="338" class="sub">key: aggregate_id (per-order ordering within a partition)</text>
+      <text x="576" y="356" class="sub">value: raw business payload JSON (no Debezium envelope)</text>
+      <text x="576" y="374" class="sub">headers: id = outbox row UUID · type = event_type</text>
+      <text x="576" y="392" class="sub">DLT: outbox.event.Order.DLT for poison messages</text>
+
+      <path d="M540,352 L560,352" class="flow" marker-end="url(#arrow)"/>
+
+      <text x="40" y="436" class="headL">5 · CONSUMER  (notification-service)</text>
+      <rect x="30" y="452" width="1050" height="130" class="cons"/>
+      <rect x="55" y="472" width="230" height="90" class="boxL"/>
+      <text x="70" y="495" class="title">Listener</text>
+      <text x="70" y="514" class="sub">@KafkaListener MANUAL_IMMEDIATE</text>
+      <text x="70" y="531" class="sub">reads id + type headers</text>
+      <text x="70" y="548" class="sub">max.poll.records = 50</text>
+
+      <rect x="305" y="472" width="230" height="90" class="boxL"/>
+      <text x="320" y="495" class="title">Idempotency</text>
+      <text x="320" y="514" class="sub">existsById(eventId) fast path</text>
+      <text x="320" y="531" class="sub">INSERT processed_events (PK=eventId)</text>
+      <text x="320" y="548" class="sub">both in one @Transactional</text>
+
+      <rect x="555" y="472" width="230" height="90" class="writer"/>
+      <text x="570" y="495" class="title">Side effect</text>
+      <text x="570" y="514" class="sub">dispatch(eventType, event)</text>
+      <text x="570" y="531" class="sub">exactly once per event_id</text>
+      <text x="570" y="548" class="sub">(log line in the PoC)</text>
+
+      <rect x="805" y="472" width="255" height="90" class="boxL"/>
+      <text x="820" y="495" class="title">Retry / DLT</text>
+      <text x="820" y="514" class="sub">ErrorHandlingDeserializer</text>
+      <text x="820" y="531" class="sub">Exponential 1s→30s, 120s cap</text>
+      <text x="820" y="548" class="sub">Recover → outbox.event.Order.DLT</text>
+
+      <path d="M285,517 L305,517" class="flow" marker-end="url(#arrow)"/>
+      <path d="M535,517 L555,517" class="flow" marker-end="url(#arrow)"/>
+      <path d="M785,517 L805,517" class="muted" marker-end="url(#arrowMuted)"/>
+
+      <path d="M300,412 L300,452" class="flow" marker-end="url(#arrow)"/>
+
+      <text x="40" y="612" class="headL">6 · SINKS</text>
+      <rect x="30" y="596" width="220" height="30" class="writer"/>
+      <text x="46" y="616" class="title">processed_events (dedup)</text>
+
+      <rect x="270" y="596" width="220" height="30" class="boxL"/>
+      <text x="286" y="616" class="title">application logs / notifications</text>
+
+      <rect x="510" y="596" width="220" height="30" class="boxL"/>
+      <text x="526" y="616" class="title">DltConsumer → alert channel</text>
+
+      <rect x="750" y="596" width="330" height="30" class="boxL"/>
+      <text x="766" y="616" class="title">/actuator/prometheus (both services)</text>
+    </svg>
+    <ul class="legend">
+      <li><span class="swatch" style="background:#58d68d"></span> Producer (order-service)</li>
+      <li><span class="swatch" style="background:#b18cff"></span> CDC (Debezium + SMT)</li>
+      <li><span class="swatch" style="background:#f5b041"></span> Consumer (notification-service)</li>
+      <li><span class="swatch" style="background:#6ea8fe"></span> Shared infrastructure</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>The three components, side by side</h2>
+  <div class="tabs" id="sourceTabs">
+    <button data-target="tab-producer" class="active">Producer</button>
+    <button data-target="tab-cdc">Debezium / SMT</button>
+    <button data-target="tab-consumer">Consumer</button>
+  </div>
+
+  <div id="tab-producer" class="panel active">
+    <div class="grid">
+      <div class="card">
+        <span class="tag producer">Hard problem</span>
+        <p>Two writes (business row + outbox row) must be one commit or no commits. The producer must not depend on Kafka being up. Cleanup DELETEs must not become downstream events.</p>
+      </div>
+      <div class="card">
+        <span class="tag producer">What we protect</span>
+        <ul>
+          <li>No order without its event, no event without its order</li>
+          <li>The wire contract: <code>aggregate_id</code>, headers, payload shape</li>
+          <li>The DB — never Kafka — is the source of truth</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag producer">Solution shape</span>
+        <p><code>@Transactional</code> service inserts both rows via JPA. No <code>KafkaTemplate</code> in this JVM. Scheduled cleanup deletes rows older than the retention window; connector filters the DELETEs from Kafka.</p>
+      </div>
+      <div class="card">
+        <span class="tag producer">Key tech</span>
+        <ul>
+          <li><code>OrderService</code> · <code>@Transactional</code></li>
+          <li><code>OutboxEventPublisher</code> · DB-only insert</li>
+          <li><code>outbox_events</code> · <code>REPLICA IDENTITY FULL</code></li>
+          <li><code>OutboxCleanupJob</code> · <code>@Scheduled</code> cron</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag producer">Tech debt</span>
+        <ul>
+          <li>Time-based retention risks loss if Debezium lags &gt; window</li>
+          <li>No HTTP-layer idempotency key — client retries become duplicate orders</li>
+          <li>Same payload DTO for Created/Paid/Cancelled</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-cdc" class="panel">
+    <div class="grid">
+      <div class="card">
+        <span class="tag cdc">Hard problem</span>
+        <p>Get an outbox INSERT out of Postgres and onto Kafka as a clean business event, in commit order per aggregate, without emitting the cleanup DELETEs, without stalling the replication slot.</p>
+      </div>
+      <div class="card">
+        <span class="tag cdc">What we protect</span>
+        <ul>
+          <li>Clean wire format — no Debezium envelope leaks to consumers</li>
+          <li>Per-aggregate ordering via <code>aggregate_id</code> as Kafka key</li>
+          <li>The replication slot — advance it even when idle</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag cdc">Solution shape</span>
+        <p><code>PostgresConnector</code> + <code>pgoutput</code>. Outbox Event Router SMT extracts payload as the value, routes to <code>outbox.event.${aggregate_type}</code>, and puts the row UUID in the <code>id</code> header. Heartbeats every 10s.</p>
+      </div>
+      <div class="card">
+        <span class="tag cdc">Key tech</span>
+        <ul>
+          <li><code>io.debezium.transforms.outbox.EventRouter</code></li>
+          <li><code>route.by.field=aggregate_type</code></li>
+          <li><code>table.expand.json.payload=true</code></li>
+          <li><code>tombstones.on.delete=false</code></li>
+          <li><code>heartbeat.interval.ms=10000</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag cdc">Tech debt</span>
+        <ul>
+          <li><code>tasks.max=1</code> — Postgres connector is single-task by design</li>
+          <li>JSON on the wire — no Schema Registry</li>
+          <li><code>snapshot.mode=no_data</code> assumes empty outbox at first launch</li>
+          <li>PoC broker is single-node; Connect internal topics unreplicated</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-consumer" class="panel">
+    <div class="grid">
+      <div class="card">
+        <span class="tag consumer">Hard problem</span>
+        <p>At-least-once delivery + rebalances + manual replay means the same event can arrive twice. Poison messages must not stall the partition. Multiple instances race on the same event id.</p>
+      </div>
+      <div class="card">
+        <span class="tag consumer">What we protect</span>
+        <ul>
+          <li>Exactly-once side effect per <code>event_id</code></li>
+          <li>Bounded blast radius for poison messages</li>
+          <li>Auditability: skipped and dead-lettered records are visible</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag consumer">Solution shape</span>
+        <p><code>@KafkaListener MANUAL_IMMEDIATE</code>. Handler is <code>@Transactional</code>: <code>existsById</code> fast-path, then PK insert into <code>processed_events</code>, then side effect. Errors retry with exponential backoff, then DLT.</p>
+      </div>
+      <div class="card">
+        <span class="tag consumer">Key tech</span>
+        <ul>
+          <li><code>ErrorHandlingDeserializer</code> around <code>JsonDeserializer</code></li>
+          <li><code>DefaultErrorHandler</code> + <code>ExponentialBackOff(1s, 2.0)</code></li>
+          <li><code>DeadLetterPublishingRecoverer</code></li>
+          <li><code>processed_events</code> (PK = eventId)</li>
+          <li><code>Persistable&lt;UUID&gt;</code> skips SELECT-before-INSERT</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag consumer">Tech debt</span>
+        <ul>
+          <li><code>processed_events</code> grows unboundedly — needs TTL</li>
+          <li>Rebalance races produce a confusing DIVEx stack per collision</li>
+          <li>Retry policy is time-bounded, not attempt-bounded</li>
+          <li>Side effect is a log line — real dispatch has its own idempotency story</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Shared platform (what ties the three together)</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="tag shared">The <code>id</code> header</span>
+      <p>Outbox row UUID → WAL → SMT → Kafka header → consumer PK. One opaque value, five hands, exactly-once effect.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">The <code>aggregate_id</code> key</span>
+      <p>DB column → SMT → Kafka message key → default partitioner. Per-order commit order for free.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Two databases</span>
+      <p><code>cdc</code> (source) holds <code>orders</code> + <code>outbox_events</code>. <code>notifications</code> (consumer) holds <code>processed_events</code>. Same cluster, separate logical DBs.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Absence of KafkaTemplate in the producer</span>
+      <p>Deliberate. If the producer JVM never sees the broker, "forgot to publish" is impossible.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Replication slot</span>
+      <p><code>debezium_order_outbox</code> is the checkpoint. Heartbeats keep it advancing. Losing it re-plays or skips depending on <code>snapshot.mode</code>.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Metrics</span>
+      <p>Both services expose <code>/actuator/prometheus</code>. Consumer lag + WAL slot lag are the two dashboard-must-haves.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Sub-problem → answer</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th style="width:28%">Sub-problem</th><th>How the POC answers it</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Dual-write (DB &amp; broker)</td><td>Only one write happens in the producer — the DB. Debezium moves the event; the producer never talks to Kafka.</td></tr>
+        <tr><td>Where events actually leave</td><td>They leave the DB via the WAL, not the JVM. A crash between "commit" and "reply" cannot lose them.</td></tr>
+        <tr><td>At-least-once → exactly-once effect</td><td>Consumer PK-inserts <code>event_id</code> in the same TX as the side effect. Duplicates hit the PK and no-op.</td></tr>
+        <tr><td>Per-aggregate ordering</td><td>SMT sets Kafka key = <code>aggregate_id</code>. Kafka's per-partition ordering does the rest.</td></tr>
+        <tr><td>Outbox table growth</td><td><code>OutboxCleanupJob</code> deletes rows older than <code>app.outbox.retention</code>. Connector suppresses DELETE events from the wire.</td></tr>
+        <tr><td>Poison messages</td><td><code>ErrorHandlingDeserializer</code> + <code>DefaultErrorHandler</code> retry with backoff, then route to <code>&lt;topic&gt;.DLT</code>.</td></tr>
+        <tr><td>WAL bloat while Debezium is down</td><td><code>heartbeat.interval.ms</code> advances the slot when idle. Monitor <code>pg_replication_slots</code>; alert before <code>wal_keep_size</code> is exceeded.</td></tr>
+        <tr><td>Cleanup DELETEs re-entering the pipeline</td><td><code>tombstones.on.delete=false</code>; SMT emits on INSERT; DELETE events are silently dropped.</td></tr>
+        <tr><td>Three-hop observability</td><td>Producer /actuator + Postgres slot metrics + Kafka UI + Consumer /actuator each own their leg.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Scaling to a fleet — how each tier changes</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="tag producer">Producer · trivial</span>
+      <p>N pods behind a load balancer. Shared Postgres. Cleanup job needs a lock so it runs once (advisory lock or ShedLock).</p>
+      <p class="muted">No leader election, no cluster membership. HPA on HTTP RPS.</p>
+    </div>
+    <div class="card">
+      <span class="tag cdc">Debezium · HA, not scale</span>
+      <p>Kafka Connect distributed mode with 2–3 workers. Only one holds the single task at a time; the DB refuses a second attach on the slot.</p>
+      <p class="muted">Never raise <code>tasks.max</code> above 1. Replicate the Connect config/offset/status topics.</p>
+    </div>
+    <div class="card">
+      <span class="tag consumer">Consumer · partitions</span>
+      <p>N pods in one consumer group. Kafka assigns partitions round-robin; ceiling is the topic's partition count. Shared dedup ledger.</p>
+      <p class="muted">HPA on consumer lag via KEDA. Cap replicas at partition count. Cooperative rebalance for graceful deploys.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <b>The single most operationally sensitive metric:</b> <code>pg_replication_slots.confirmed_flush_lsn</code> vs. <code>pg_current_wal_lsn()</code>. If that gap grows unboundedly, the source DB is on the way to a disk-full outage — regardless of how healthy the rest of the pipeline looks. Detail in <a href="../CONSISTENCY.md">CONSISTENCY.md</a>.
+  </div>
+</section>
+
+<section>
+  <h2>Tech debt at a glance</h2>
+  <div class="card">
+    <ul>
+      <li><b>Single Kafka broker in the compose file</b> — real deployments need replicated topics for outbox <em>and</em> the Debezium internal topics.</li>
+      <li><b>JSON on the wire, no schema</b> — a producer field rename silently breaks consumers.</li>
+      <li><b><code>REPLICA IDENTITY FULL</code></b> — heavier WAL writes; fine for outbox, avoid on hot business tables.</li>
+      <li><b>Time-based outbox retention</b> — must be shorter than max Debezium lag or events are lost.</li>
+      <li><b>No HTTP-layer idempotency key</b> — client retries create duplicate orders.</li>
+      <li><b><code>processed_events</code> grows forever</b> — same TTL problem as the outbox, on the consumer side.</li>
+      <li><b>Retry policy time-bounded</b> — a 45s DB blip may exhaust retries and DLT a legitimate message.</li>
+      <li><b>Config lives in three places</b> — <code>application.yml</code>, container env, and <code>outbox-connector.json</code>.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Standalone doc — open <code>docs/flow.html</code> in any browser. Nothing to install.
+</footer>
+
+<script>
+  document.querySelectorAll('#sourceTabs button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = btn.getAttribute('data-target');
+      document.querySelectorAll('#sourceTabs button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      var el = document.getElementById(target);
+      if (el) el.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

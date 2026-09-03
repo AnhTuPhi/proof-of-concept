@@ -1,0 +1,221 @@
+# EMQX 5.x cluster with full production-style support stack.
+#
+# Why 3 EMQX nodes:
+#   In EMQX 5.x, the cluster runs core/replicant. We expose 3 cores so split-brain
+#   and rolling-restart scenarios are demonstrable (POC 14). Two nodes are also fine
+#   for non-cluster POCs - just docker compose up emqx1.
+#
+# Why all these companions:
+#   Postgres - for ACL & auth backend (POC 05) and rule-engine SQL sink (POC 06)
+#   Kafka    - for the EMQX -> Kafka bridge (POC 06)
+#   Prometheus + Grafana - observability (POC 14, mentioned throughout)
+#   Vernemq-style: keep ports stable so the Spring apps work against any single broker.
+#
+# Ports:
+#   1883 / 1884 / 1885   MQTT TCP (per node)
+#   8883 / 8884 / 8885   MQTT TLS (per node)
+#   8083 / 8084 / 8085   MQTT WebSocket
+#   8084-86              MQTT WSS
+#   18083 / 18084 / 18085  Dashboard (default admin / public)
+#   8081                 Public API (Mgmt API) - we expose only node 1
+#
+version: "3.9"
+
+x-emqx-common: &emqx-common
+  image: emqx/emqx:5.8.3
+  restart: unless-stopped
+  ulimits:
+    nofile:
+      soft: 1048576   # match production file-descriptor recipe (see POC 01)
+      hard: 1048576
+  environment:
+    EMQX_NAME: emqx
+    # cluster discovery via static seed list (k8s/etcd is also possible - see POC 14)
+    EMQX_CLUSTER__DISCOVERY_STRATEGY: static
+    EMQX_CLUSTER__STATIC__SEEDS: '["emqx@emqx1.emqx.io","emqx@emqx2.emqx.io","emqx@emqx3.emqx.io"]'
+    # Erlang distribution cookie - MUST match across all cluster nodes (see "silent split" gotcha)
+    EMQX_NODE__COOKIE: "emqx-poc-cookie-change-me"
+    EMQX_DASHBOARD__DEFAULT_PASSWORD: "public"
+    EMQX_LOG__CONSOLE__LEVEL: info
+    # enable Prometheus scrape endpoint
+    EMQX_PROMETHEUS__ENABLE: "true"
+    EMQX_PROMETHEUS__PUSH_GATEWAY_SERVER: "http://prometheus:9091"
+
+services:
+
+  # ---------- EMQX Cluster ----------
+  emqx1:
+    <<: *emqx-common
+    container_name: emqx1
+    hostname: emqx1.emqx.io
+    environment:
+      EMQX_NAME: emqx
+      EMQX_HOST: emqx1.emqx.io
+      EMQX_NODE_NAME: "emqx@emqx1.emqx.io"
+      EMQX_CLUSTER__DISCOVERY_STRATEGY: static
+      EMQX_CLUSTER__STATIC__SEEDS: '["emqx@emqx1.emqx.io","emqx@emqx2.emqx.io","emqx@emqx3.emqx.io"]'
+      EMQX_NODE__COOKIE: "emqx-poc-cookie-change-me"
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: "public"
+      EMQX_PROMETHEUS__ENABLE: "true"
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+      - "8083:8083"
+      - "8084:8084"
+      - "18083:18083"
+      - "8081:8081"
+    volumes:
+      - emqx1-data:/opt/emqx/data
+      - emqx1-log:/opt/emqx/log
+      - ./infra/emqx/etc:/opt/emqx/etc-extra:ro
+      - ./infra/emqx/certs:/opt/emqx/etc-extra/certs:ro
+    networks: [emqx-net]
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  emqx2:
+    <<: *emqx-common
+    container_name: emqx2
+    hostname: emqx2.emqx.io
+    depends_on: [emqx1]
+    environment:
+      EMQX_NAME: emqx
+      EMQX_HOST: emqx2.emqx.io
+      EMQX_NODE_NAME: "emqx@emqx2.emqx.io"
+      EMQX_CLUSTER__DISCOVERY_STRATEGY: static
+      EMQX_CLUSTER__STATIC__SEEDS: '["emqx@emqx1.emqx.io","emqx@emqx2.emqx.io","emqx@emqx3.emqx.io"]'
+      EMQX_NODE__COOKIE: "emqx-poc-cookie-change-me"
+    ports:
+      - "1884:1883"
+      - "8884:8883"
+      - "18084:18083"
+    volumes:
+      - emqx2-data:/opt/emqx/data
+    networks: [emqx-net]
+
+  emqx3:
+    <<: *emqx-common
+    container_name: emqx3
+    hostname: emqx3.emqx.io
+    depends_on: [emqx1]
+    environment:
+      EMQX_NAME: emqx
+      EMQX_HOST: emqx3.emqx.io
+      EMQX_NODE_NAME: "emqx@emqx3.emqx.io"
+      EMQX_CLUSTER__DISCOVERY_STRATEGY: static
+      EMQX_CLUSTER__STATIC__SEEDS: '["emqx@emqx1.emqx.io","emqx@emqx2.emqx.io","emqx@emqx3.emqx.io"]'
+      EMQX_NODE__COOKIE: "emqx-poc-cookie-change-me"
+    ports:
+      - "1885:1883"
+      - "8885:8883"
+      - "18085:18083"
+    volumes:
+      - emqx3-data:/opt/emqx/data
+    networks: [emqx-net]
+
+  # ---------- HAProxy: client-side LB to spread connections across nodes ----------
+  # In production this would be a real LB (AWS NLB / Envoy / HAProxy). We put one in
+  # so connection-scale POCs and storm POCs hit the cluster as a whole.
+  haproxy:
+    image: haproxy:2.9-alpine
+    container_name: emqx-lb
+    depends_on: [emqx1, emqx2, emqx3]
+    ports:
+      - "1880:1883"     # MQTT TCP through LB
+      - "8880:8083"     # WS through LB
+      - "8404:8404"     # HAProxy stats
+    volumes:
+      - ./infra/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks: [emqx-net]
+
+  # ---------- Postgres: auth/ACL backend + rule-engine sink ----------
+  postgres:
+    image: postgres:16-alpine
+    container_name: emqx-postgres
+    environment:
+      POSTGRES_USER: emqx
+      POSTGRES_PASSWORD: emqx_pass
+      POSTGRES_DB: emqx
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks: [emqx-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emqx"]
+      interval: 5s
+      retries: 10
+
+  # ---------- Kafka: bridge sink ----------
+  kafka:
+    image: bitnami/kafka:3.9
+    container_name: emqx-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    networks: [emqx-net]
+
+  # ---------- Prometheus + Grafana ----------
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: emqx-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    networks: [emqx-net]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: emqx-grafana
+    depends_on: [prometheus]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    networks: [emqx-net]
+
+  # ---------- emqtt-bench: official EMQX benchmarking tool ----------
+  # Used by POC 01 (million connections) and POC 02 (connection storm).
+  # NOTE: container starts idle; you exec into it to run benchmarks.
+  emqtt-bench:
+    image: emqx/emqtt-bench:0.4.20
+    container_name: emqtt-bench
+    entrypoint: ["sleep", "infinity"]
+    networks: [emqx-net]
+
+volumes:
+  emqx1-data: {}
+  emqx1-log: {}
+  emqx2-data: {}
+  emqx3-data: {}
+  postgres-data: {}
+  kafka-data: {}
+  prom-data: {}
+  grafana-data: {}
+
+networks:
+  emqx-net:
+    driver: bridge

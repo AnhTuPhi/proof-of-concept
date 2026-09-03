@@ -1,0 +1,24 @@
+server:
+  port: 8113
+
+spring:
+  application.name: poc-13-ota-updates
+
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: ota
+  username: backend-svc
+  password: backend-secret
+  # OTA server MUST survive restarts without losing in-flight chunk requests.
+  clean-session: false
+  session-expiry-interval: 86400
+  keep-alive-seconds: 60
+  connection-timeout-seconds: 10
+  # The server holds many concurrent transfers — raise inflight.
+  max-inflight: 500
+  automatic-reconnect: true
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

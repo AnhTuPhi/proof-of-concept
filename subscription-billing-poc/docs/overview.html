@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subscription Billing POCs — Architecture &amp; Flow Walkthrough</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171a2b; --panel2:#1e2236; --line:#2a2f4a;
+    --ink:#e8ebf5; --muted:#9aa2c0; --accent:#6ea8fe; --accent2:#8b7cff;
+    --green:#3ddc97; --amber:#ffca55; --red:#ff6b7a; --chip:#232842;
+    --mono:"SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#1b2140 0%,var(--bg) 55%);
+    color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent)}
+  header{padding:38px 24px 10px;max-width:1080px;margin:0 auto}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--muted);font-size:15px;max-width:760px}
+  main{max-width:1080px;margin:0 auto;padding:0 24px 80px}
+
+  nav.tabs{display:flex;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:5;
+    padding:14px 0 12px;background:linear-gradient(180deg,var(--bg) 70%,transparent);margin-top:14px}
+  .tab{border:1px solid var(--line);background:var(--panel);color:var(--muted);
+    padding:9px 15px;border-radius:999px;cursor:pointer;font-size:14px;font-weight:600;transition:.15s}
+  .tab:hover{color:var(--ink);border-color:var(--accent)}
+  .tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#0b0e1a;border-color:transparent}
+
+  section.view{display:none;animation:fade .25s ease}
+  section.view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:22px 24px;margin:18px 0;box-shadow:0 12px 40px -24px #000}
+  .card h2{margin:.1em 0 .5em;font-size:21px;letter-spacing:-.01em}
+  .card h3{margin:1.2em 0 .4em;font-size:16px;color:var(--accent)}
+  .lead{color:var(--muted);font-size:15px}
+  code{font-family:var(--mono);background:var(--chip);padding:1px 6px;border-radius:6px;font-size:.9em}
+  .grid{display:grid;gap:14px}
+  @media(min-width:720px){.grid.c3{grid-template-columns:repeat(3,1fr)}.grid.c2{grid-template-columns:1fr 1fr}}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
+    padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.i{background:rgba(110,168,254,.12);color:var(--accent);border-color:transparent}
+  .port{font-family:var(--mono);color:var(--green);font-size:13px}
+
+  .kv{border-collapse:collapse;width:100%;font-size:14px}
+  .kv th,.kv td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  .kv th{color:var(--muted);font-weight:600;white-space:nowrap}
+  .kv tr:last-child td,.kv tr:last-child th{border-bottom:none}
+
+  .tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;font-family:var(--mono)}
+  .t-green{background:rgba(61,220,151,.15);color:var(--green)}
+  .t-amber{background:rgba(255,202,85,.15);color:var(--amber)}
+  .t-red{background:rgba(255,107,122,.15);color:var(--red)}
+  .t-blue{background:rgba(110,168,254,.15);color:var(--accent)}
+
+  ul.clean{margin:.4em 0;padding-left:1.1em}
+  ul.clean li{margin:.28em 0}
+  .debt li{color:var(--amber)}
+  .note{font-size:13px;color:var(--muted);border-left:3px solid var(--accent);padding:6px 12px;margin:10px 0;background:rgba(110,168,254,.06);border-radius:0 8px 8px 0}
+
+  /* flow diagram */
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:16px 0}
+  .step{flex:1;min-width:130px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px;position:relative;margin:6px 16px 6px 0}
+  .step .n{font-family:var(--mono);font-size:12px;color:var(--accent2)}
+  .step .t{font-weight:700;font-size:14px;margin:2px 0}
+  .step .d{font-size:12.5px;color:var(--muted)}
+  .step::after{content:"›";position:absolute;right:-15px;top:50%;transform:translateY(-50%);
+    color:var(--accent);font-size:22px;font-weight:700}
+  .step:last-child{margin-right:0}
+  .step:last-child::after{content:""}
+
+  .money{font-family:var(--mono)}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+
+  /* interactive proration widget */
+  .calc{display:grid;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .calc label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+  .calc input,.calc select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:14px}
+  .calc .row{display:grid;gap:12px;grid-template-columns:repeat(2,1fr)}
+  @media(min-width:640px){.calc .row{grid-template-columns:repeat(4,1fr)}}
+  .out{font-family:var(--mono);font-size:14px;background:var(--bg);border:1px dashed var(--line);
+    border-radius:10px;padding:14px;white-space:pre-wrap}
+
+  /* state machine */
+  .sm{display:flex;align-items:center;gap:0;flex-wrap:wrap;margin:14px 0}
+  .state{padding:8px 14px;border-radius:10px;font-weight:700;font-size:13px;font-family:var(--mono);border:1px solid}
+  .s-active{color:var(--green);border-color:var(--green);background:rgba(61,220,151,.08)}
+  .s-past{color:var(--amber);border-color:var(--amber);background:rgba(255,202,85,.08)}
+  .s-susp{color:var(--red);border-color:var(--red);background:rgba(255,107,122,.08)}
+  .s-canc{color:var(--muted);border-color:var(--line);background:var(--chip)}
+  .arrow{color:var(--accent);font-size:13px;padding:0 10px;font-family:var(--mono);white-space:nowrap}
+  .arrow small{display:block;color:var(--muted);font-size:10px;text-align:center}
+
+  footer{max-width:1080px;margin:0 auto;padding:20px 24px 60px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+  .docrow{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+  .docrow a{display:inline-flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);
+    padding:8px 13px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Subscription Billing POCs</h1>
+  <p class="sub">Three runnable Spring Boot 3.4 / Java 21 POCs, each isolating one genuinely hard part of
+  SaaS recurring billing. This page is a visual walkthrough of what each one protects, how it works, and
+  what changes when it runs behind many pods. See <a href="../ISSUE.md">ISSUE.md</a>,
+  <a href="../TECHNICAL.md">TECHNICAL.md</a>, and <a href="../CONSISTENCY.md">CONSISTENCY.md</a> for the prose.</p>
+</header>
+
+<main>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-v="overview">Overview</button>
+    <button class="tab" data-v="proration">1 · Proration</button>
+    <button class="tab" data-v="dunning">2 · Dunning</button>
+    <button class="tab" data-v="usage">3 · Usage</button>
+    <button class="tab" data-v="consistency">Scaling &amp; Consistency</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section class="view active" id="overview">
+    <div class="card">
+      <h2>What we are protecting</h2>
+      <p class="lead">Every path here moves money. A bug doesn't misplace a pixel — it overcharges a
+      customer, drops revenue, or issues a refund that should never have left. Five invariants hold across
+      all three POCs; everything in the code exists to protect one of them.</p>
+      <table class="kv">
+        <tr><th>I1 · Auditable</th><td>Every amount is reproducible from its inputs and each line item explains itself.</td></tr>
+        <tr><th>I2 · No double-charge</th><td>A retried renewal or replayed usage event never bills twice.</td></tr>
+        <tr><th>I3 · No dropped revenue</th><td>A late or duplicated event is still counted exactly once; a recoverable failure is retried.</td></tr>
+        <tr><th>I4 · No wrong money out</th><td>A downgrade produces <em>credit</em>, never a cash refund.</td></tr>
+        <tr><th>I5 · Legal &amp; idempotent state</th><td>Subscriptions move only along allowed edges; re-running a batch changes nothing the second time.</td></tr>
+      </table>
+    </div>
+
+    <div class="grid c3">
+      <div class="card">
+        <span class="pill i">1 · Proration</span> <span class="port">:8081</span>
+        <h3>Mid-cycle plan change</h3>
+        <p class="lead">Fair, to-the-day credit + charge when a customer switches plans — with no rounding
+        drift and <strong>no cash refund</strong>.</p>
+        <p><span class="tag t-blue">I1</span> <span class="tag t-blue">I4</span></p>
+      </div>
+      <div class="card">
+        <span class="pill i">2 · Dunning</span> <span class="port">:8082</span>
+        <h3>Failed-payment recovery</h3>
+        <p class="lead">Deterministic retry cadence through a lifecycle state machine, with instant
+        recovery and an idempotent clock.</p>
+        <p><span class="tag t-blue">I2</span> <span class="tag t-blue">I3</span> <span class="tag t-blue">I5</span></p>
+      </div>
+      <div class="card">
+        <span class="pill i">3 · Usage</span> <span class="port">:8083</span>
+        <h3>Metered billing</h3>
+        <p class="lead">Idempotent ingestion of an unreliable event stream → rebuildable rollups → tiered
+        invoice you can reconcile to the cent.</p>
+        <p><span class="tag t-blue">I1</span> <span class="tag t-blue">I2</span> <span class="tag t-blue">I3</span></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>The recurring pattern</h2>
+      <p class="lead">One idea ties the three together and makes the scaling story tractable:</p>
+      <div class="note"><strong>The database enforces the invariants that must survive concurrency; the
+      application enforces the policy.</strong> DB-unique idempotency, rebuildable + reconciled aggregates,
+      and an explicit state machine are the load-bearing choices.</p>
+    </div>
+  </section>
+
+  <!-- PRORATION -->
+  <section class="view" id="proration">
+    <div class="card">
+      <h2>1 · Proration engine <span class="port">localhost:8081</span></h2>
+      <p class="lead"><strong>Hard problem:</strong> a customer on <code>basic</code> ($10) upgrades to
+      <code>pro</code> ($30) halfway through a cycle. Credit the unused old-plan time, charge the remaining
+      new-plan time — to the exact day, over a real 28–31 day cycle. A downgrade can net negative; that
+      surplus must become <strong>credit, not cash</strong>.</p>
+
+      <div class="flow">
+        <div class="step"><div class="n">01</div><div class="t">Change requested</div><div class="d">newPlan + strategy + <code>today</code></div></div>
+        <div class="step"><div class="n">02</div><div class="t">Pure proration</div><div class="d">credit(old) + charge(new) on real day count</div></div>
+        <div class="step"><div class="n">03</div><div class="t">Net the invoice</div><div class="d">always invoice — never charge directly</div></div>
+        <div class="step"><div class="n">04</div><div class="t">Credit policy</div><div class="d">net&lt;0 → bank credit; net&gt;0 → consume credit</div></div>
+        <div class="step"><div class="n">05</div><div class="t">Persist + audit</div><div class="d">Invoice + line items, planId + period</div></div>
+      </div>
+
+      <h3>Try the math</h3>
+      <p class="lead">The same calculation <code>ProrationCalculator</code> + <code>Money.prorate</code> perform.
+      Watch a downgrade go negative and become banked credit.</p>
+      <div class="calc">
+        <div class="row">
+          <div><label>Old plan $/mo</label><input id="op" type="number" value="10" step="1"></div>
+          <div><label>New plan $/mo</label><input id="np" type="number" value="30" step="1"></div>
+          <div><label>Cycle length (days)</label><input id="cl" type="number" value="30" min="1"></div>
+          <div><label>Day of change</label><input id="cd" type="number" value="15" min="0"></div>
+        </div>
+        <div class="out" id="proOut"></div>
+      </div>
+
+      <h3>Key tech by responsibility</h3>
+      <table class="kv">
+        <tr><th>Proration math</th><td><code>ProrationCalculator</code> — pure fn → (credit, charge) line items</td></tr>
+        <tr><th>Rounding</th><td><code>Money.prorate</code> — 8-dp internal precision, then HALF_UP to currency scale</td></tr>
+        <tr><th>No-refund policy</th><td><code>SubscriptionService.applyCreditAndPersist</code></td></tr>
+        <tr><th>Strategies</th><td><code>IMMEDIATE_PRORATE</code> · <code>END_OF_CYCLE</code></td></tr>
+        <tr><th>Balance safety</th><td><code>CustomerCredit</code> <code>@Version</code> optimistic lock</td></tr>
+      </table>
+
+      <h3>Tech debt to acknowledge</h3>
+      <ul class="clean debt">
+        <li>No renewal engine — <code>END_OF_CYCLE</code> records intent but nothing fires at period end.</li>
+        <li>Credit is a single mutable balance, not an append-only ledger; no expiry or cap.</li>
+        <li>Monthly cycles only (<code>plusMonths(1)</code>); <code>today</code> is a param, not a real clock.</li>
+        <li><code>invoicesFor</code> does an in-memory <code>findAll()</code> scan.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- DUNNING -->
+  <section class="view" id="dunning">
+    <div class="card">
+      <h2>2 · Dunning <span class="port">localhost:8082</span></h2>
+      <p class="lead"><strong>Hard problem:</strong> a renewal charge is declined. Don't cancel on the first
+      failure (you'd drop recoverable revenue), don't retry forever (fees, resentment). Move through a
+      lifecycle with a deterministic retry cadence, notify at each stage, let the customer fix their card and
+      settle instantly — and make the clock safe to re-run.</p>
+
+      <h3>The state machine</h3>
+      <div class="sm">
+        <span class="state s-active">ACTIVE</span>
+        <span class="arrow">→<small>charge fails</small></span>
+        <span class="state s-past">PAST_DUE</span>
+        <span class="arrow">→<small>grace elapsed</small></span>
+        <span class="state s-susp">SUSPENDED</span>
+        <span class="arrow">→<small>window elapsed</small></span>
+        <span class="state s-canc">CANCELED</span>
+      </div>
+      <div class="sm">
+        <span class="arrow" style="padding-left:0">↺ from PAST_DUE / SUSPENDED</span>
+        <span class="state s-active">ACTIVE</span>
+        <span class="arrow"><small>card updated → charge succeeds → pending retries canceled</small></span>
+      </div>
+
+      <h3>Retry cadence <span class="tag t-amber">application.yml</span></h3>
+      <table class="kv">
+        <tr><th><code>retry-offsets-days</code></th><td><code>[3, 5, 7]</code> — attempt #2 at day 3, #3 at day 5, #4 at day 7 after the failure</td></tr>
+        <tr><th><code>grace-period-days</code></th><td><code>2</code> — PAST_DUE → SUSPENDED after retries exhausted + grace</td></tr>
+        <tr><th><code>suspension-window-days</code></th><td><code>14</code> — SUSPENDED → CANCELED</td></tr>
+      </table>
+
+      <h3>Notification cadence</h3>
+      <div class="flow">
+        <div class="step"><div class="t">retry_scheduled</div><div class="d">on each retry</div></div>
+        <div class="step"><div class="t">final_warning</div><div class="d">last retry</div></div>
+        <div class="step"><div class="t">grace_period</div><div class="d">retries exhausted</div></div>
+        <div class="step"><div class="t">service_suspended</div><div class="d">grace elapsed</div></div>
+      </div>
+
+      <h3>Key tech by responsibility</h3>
+      <table class="kv">
+        <tr><th>Cadence config</th><td><code>DunningProperties</code> ← <code>application.yml</code></td></tr>
+        <tr><th>State machine</th><td><code>Subscription</code> (guarded transitions)</td></tr>
+        <tr><th>Orchestration</th><td><code>DunningService.attemptInitialRenewal / tick / updatePaymentMethod</code></td></tr>
+        <tr><th>Payment seam</th><td><code>ChargeGateway</code> (mockable PSP)</td></tr>
+        <tr><th>Notifications</th><td><code>NotificationGateway</code> (assertable in tests)</td></tr>
+        <tr><th>Audit</th><td><code>DunningEvent</code> timeline</td></tr>
+      </table>
+
+      <h3>Tech debt to acknowledge</h3>
+      <ul class="clean debt">
+        <li><code>tick</code> is triggered by an API call, not a scheduler — needs exactly-once execution across pods.</li>
+        <li>No idempotency key sent to the charge gateway; <code>findDueRetries</code> needs <code>FOR UPDATE SKIP LOCKED</code> for multi-pod safety.</li>
+        <li>Time is a request parameter (<code>today</code>), not a timezone-aware clock.</li>
+        <li>Notifications are synchronous + in-memory — no outbox, so a crash can lose (or a retry duplicate) an email.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- USAGE -->
+  <section class="view" id="usage">
+    <div class="card">
+      <h2>3 · Usage-based billing <span class="port">localhost:8083</span></h2>
+      <p class="lead"><strong>Hard problem:</strong> meters deliver events <em>at-least-once</em> — duplicated,
+      out of order, and late. Count each exactly once, aggregate into stable daily totals, price through
+      graduated tiers, and produce an invoice the customer can reconcile to ±0.0001.</p>
+
+      <div class="flow">
+        <div class="step"><div class="n">01</div><div class="t">Ingest</div><div class="d">event_id UNIQUE → replays dropped</div></div>
+        <div class="step"><div class="n">02</div><div class="t">Rollup</div><div class="d">rebuildable per customer/metric/day (UTC)</div></div>
+        <div class="step"><div class="n">03</div><div class="t">Tier price</div><div class="d">graduated tiers, 4-dp</div></div>
+        <div class="step"><div class="n">04</div><div class="t">Invoice</div><div class="d">line item per tier w/ qty + unit price</div></div>
+        <div class="step"><div class="n">05</div><div class="t">Reconcile</div><div class="d">SUM(raw) vs SUM(rollup) → flag drift</div></div>
+      </div>
+
+      <h3>Try graduated tier pricing</h3>
+      <p class="lead"><code>API_CALLS</code>: 0–100K free · 100K–1M @ $0.0010 · 1M–10M @ $0.0005 · 10M+ @ $0.0002.
+      The <code>TieredPricingCalculator</code> fills each tier's width from the remaining quantity.</p>
+      <div class="calc">
+        <div class="row">
+          <div style="grid-column:span 2"><label>API calls this month</label><input id="calls" type="number" value="2500000" step="100000"></div>
+          <div style="grid-column:span 2;align-self:end"><span class="lead">Drag the number and watch the tiers fill.</span></div>
+        </div>
+        <div class="out" id="usageOut"></div>
+      </div>
+
+      <h3>Why each design choice</h3>
+      <table class="kv">
+        <tr><th>Idempotent ingest</th><td><code>event_id</code> UNIQUE + catch <code>DataIntegrityViolationException</code> — <strong>the DB is the arbiter</strong>, safe across N writers as-is</td></tr>
+        <tr><th>Rebuildable rollup</th><td>delete + recompute per <code>(customer, metric, day)</code> → late/out-of-order events are a non-event</td></tr>
+        <tr><th>Deterministic bucket</th><td><code>usageDay</code> derived from <code>occurredAt</code> in UTC</td></tr>
+        <tr><th>Transparency</th><td>each <code>TierCharge</code> → line item carrying qty + price → customer re-derives the amount</td></tr>
+        <tr><th>Proof of honesty</th><td><code>ReconciliationService</code> compares raw vs rollup per metric</td></tr>
+      </table>
+
+      <h3>Tech debt to acknowledge</h3>
+      <ul class="clean debt">
+        <li>Rollup delete+insert isn't atomic vs concurrent ingest — reconciliation is the deliberate safety net.</li>
+        <li>Rollup is manually triggered; needs scheduled/streaming rollup at scale.</li>
+        <li>Full-range scans, no partitioning — real "millions" needs time-series/columnar storage.</li>
+        <li>Reconciliation detects drift but does not self-heal; pricing is static + global.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CONSISTENCY -->
+  <section class="view" id="consistency">
+    <div class="card">
+      <h2>Scaling to N pods / a VM fleet</h2>
+      <p class="lead">Today: one process, in-memory H2. That single-node assumption hides every distributed
+      problem. Here's what breaks and what stays correct behind <code>replicas: N</code>.</p>
+      <div class="note"><strong>Step zero:</strong> <code>h2:mem</code> is per-process — two pods = two truths.
+      Nothing works until every replica shares one PostgreSQL/Oracle.</div>
+    </div>
+
+    <div class="grid c2">
+      <div class="card">
+        <h3><span class="tag t-green">EASY</span> Stateless request tier</h3>
+        <p class="lead">Controllers/services hold no in-process state and no HTTP session. Any pod serves any
+        request. Create-sub, change-plan, ingest, queries — scale horizontally freely, no sticky sessions.</p>
+      </div>
+      <div class="card">
+        <h3><span class="tag t-red">HARD</span> Batch / clock tier</h3>
+        <p class="lead"><code>dunning.tick</code>, <code>rollup</code>, and end-of-cycle renewals sweep the
+        dataset on a schedule. Naive <code>@Scheduled</code> on every pod → N concurrent runs → double-charge.
+        Must run <strong>exactly once</strong>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Exactly-once batch — pick one</h3>
+      <table class="kv">
+        <tr><th>A · Externalize <span class="tag t-green">start here</span></th><td>k8s <code>CronJob</code> (or a <code>replicas:1</code> worker) calls the batch. One firing, one runner. Web tier stays stateless.</td></tr>
+        <tr><th>B · Leader election</th><td>ShedLock / clustered Quartz / k8s <code>Lease</code> — only the leader acts.</td></tr>
+        <tr><th>C · Partition</th><td>Shard by <code>customerId % N</code>; each pod owns a disjoint slice.</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>What protects each invariant across pods</h3>
+      <table class="kv">
+        <tr><th><span class="tag t-blue">I2</span> Charge</th><td><span class="t-amber tag">add</span> <code>FOR UPDATE SKIP LOCKED</code> on due retries + idempotency key to the PSP</td></tr>
+        <tr><th><span class="tag t-blue">I2/I3</span> Ingest</th><td><span class="t-green tag">already safe</span> <code>event_id</code> UNIQUE is the textbook multi-writer idempotency pattern</td></tr>
+        <tr><th><span class="tag t-blue">I3</span> Late events</th><td><span class="t-green tag">scale-friendly</span> rollups recompute (order-independent); <span class="t-amber tag">add</span> atomic upsert for the delete/insert race</td></tr>
+        <tr><th><span class="tag t-blue">I4</span> Credit</th><td><span class="t-green tag">has @Version</span> <span class="t-amber tag">add</span> caller retry on conflict + move to append-only ledger</td></tr>
+        <tr><th><span class="tag t-blue">I5</span> Lifecycle</th><td><span class="t-amber tag">add</span> row lock or <code>@Version</code> on <code>Subscription</code> to serialize transitions</td></tr>
+        <tr><th>Side effects</th><td><span class="t-amber tag">add</span> transactional <strong>outbox</strong> for notifications/webhooks (exactly-once-effectively)</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Consistency levels we promise</h3>
+      <table class="kv">
+        <tr><th>Subscription / invoice / credit</th><td><span class="tag t-green">Strong</span> ACID + row/optimistic locks</td></tr>
+        <tr><th>Raw usage events</th><td><span class="tag t-green">Exactly-once storage</span> unique constraint</td></tr>
+        <tr><th>Rollups vs raw events</th><td><span class="tag t-amber">Eventually consistent</span> rebuildable + reconciled on schedule</td></tr>
+        <tr><th>Notifications / charge</th><td><span class="tag t-blue">At-least-once / effectively-once</span> outbox + idempotency key</td></tr>
+      </table>
+      <p class="lead" style="margin-top:12px">Financial <em>state</em> is strongly consistent. <em>Derived</em>
+      data is eventually consistent by design and continuously reconciled — drift is measured, not assumed
+      absent. Full checklist in <a href="../CONSISTENCY.md">CONSISTENCY.md</a>.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div>Self-contained explainer · no build step · open directly in a browser.</div>
+    <div class="docrow">
+      <a href="../ISSUE.md">📄 ISSUE.md</a>
+      <a href="../TECHNICAL.md">🔧 TECHNICAL.md</a>
+      <a href="../CONSISTENCY.md">⚖️ CONSISTENCY.md</a>
+      <a href="../README.md">📘 README.md</a>
+    </div>
+  </footer>
+</main>
+
+<script>
+  // tab switching
+  const tabs=document.getElementById('tabs');
+  tabs.addEventListener('click',e=>{
+    const b=e.target.closest('.tab'); if(!b)return;
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t===b));
+    const v=b.dataset.v;
+    document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.id===v));
+    window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  const money=n=>(n<0?'-$':'$')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  // proration widget — mirrors Money.prorate(remainingDays,totalDays)
+  function proration(){
+    const op=+document.getElementById('op').value, np=+document.getElementById('np').value;
+    const total=Math.max(1,+document.getElementById('cl').value);
+    let cd=Math.min(Math.max(0,+document.getElementById('cd').value),total);
+    const remaining=total-cd;
+    const credit=-(op*remaining/total);          // unused old plan (a credit → negative)
+    const charge=np*remaining/total;              // remaining new plan
+    const net=credit+charge;
+    let policy;
+    if(net<0){
+      policy=`net is negative → bank ${money(-net)} as credit (NO cash refund)\ninvoice nets to $0.00`;
+    }else if(net>0){
+      policy=`net is positive → charge / consume any credit first`;
+    }else{ policy=`net is zero`; }
+    document.getElementById('proOut').textContent=
+`remaining ${remaining} of ${total} days
+  credit (unused ${op.toFixed(0)} plan) : ${money(credit)}
+  charge (remaining ${np.toFixed(0)} plan): ${money(charge)}
+  ─────────────────────────────
+  net                          : ${money(net)}
+
+${policy}`;
+  }
+  ['op','np','cl','cd'].forEach(id=>document.getElementById(id).addEventListener('input',proration));
+  proration();
+
+  // usage tier widget
+  const TIERS=[
+    {start:0,       end:100000,   price:0,      label:'0–100K (free)'},
+    {start:100000,  end:1000000,  price:0.0010, label:'100K–1M'},
+    {start:1000000, end:10000000, price:0.0005, label:'1M–10M'},
+    {start:10000000,end:null,     price:0.0002, label:'10M+'},
+  ];
+  function usage(){
+    let remaining=Math.max(0,+document.getElementById('calls').value);
+    let lines=[], grand=0;
+    for(const t of TIERS){
+      if(remaining<=0)break;
+      const width=t.end===null?remaining:(t.end-t.start);
+      const qty=Math.min(remaining,width);
+      const amt=qty*t.price;
+      grand+=amt;
+      lines.push(`  ${t.label.padEnd(16)} ${qty.toLocaleString().padStart(12)} @ $${t.price.toFixed(4)} = ${money(amt)}`);
+      remaining-=qty;
+    }
+    document.getElementById('usageOut').textContent=
+`tiers that contributed:
+${lines.join('\n')}
+  ─────────────────────────────
+  total                                = ${money(grand)}`;
+  }
+  document.getElementById('calls').addEventListener('input',usage);
+  usage();
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: session-management-poc
+
+app:
+  jwt:
+    secret: "a-256-bit-secret-key-for-jjwt-hs256-pattern-poc-not-for-prod-use"
+    access-token-ttl-seconds: 60
+    refresh-token-ttl-seconds: 900

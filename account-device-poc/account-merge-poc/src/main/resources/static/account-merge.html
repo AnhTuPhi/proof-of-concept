@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Account Merge POC</title>
+<style>
+  :root { --bg:#0f1318; --panel:#151b22; --panel2:#1c232c; --line:#222b34; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --warn:#d29922; --bad:#f85149; --good:#3fb950; --purple:#bc8cff; }
+  *{box-sizing:border-box} html,body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;font-size:14px}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+  h1{margin:0;font-size:18px}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  main{padding:20px;max-width:1280px;margin:0 auto}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .panel h2{margin:0 0 10px;font-size:14px;color:var(--accent)}
+  .user-card{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:12px;margin-bottom:8px}
+  .user-card.merged{opacity:0.6;border-left:3px solid var(--purple)}
+  .user-card.active{border-left:3px solid var(--good)}
+  .uid{font-family:ui-monospace,Consolas,monospace;color:var(--muted);font-size:12px}
+  .field{display:flex;justify-content:space-between;padding:2px 0;font-size:13px}
+  .field span:first-child{color:var(--muted)}
+  .btn{background:#1f6feb;color:#fff;border:0;padding:7px 12px;border-radius:5px;cursor:pointer;font-size:13px;margin-right:6px;margin-top:4px}
+  .btn:hover{background:#388bfd}
+  .btn.danger{background:#a4252e}
+  .btn.danger:hover{background:#cf3e48}
+  .btn.ghost{background:#2a313a;color:var(--text)}
+  .btn.ghost:hover{background:#3a424c}
+  .conflict{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px;margin-top:8px}
+  .conflict h4{margin:0 0 6px;font-size:13px;color:var(--warn)}
+  .conflict-row{display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;align-items:center;padding:4px 0;font-size:12.5px}
+  .conflict-row label{padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--panel);cursor:pointer;display:flex;align-items:center;gap:6px}
+  .conflict-row label.selected{border-color:var(--good);background:#0d2818}
+  .conflict-row input[type=radio]{margin:0}
+  pre{background:#0a0d11;border:1px solid var(--line);border-radius:6px;padding:10px;color:var(--muted);font-size:12px;overflow-x:auto;max-height:240px}
+  .step{display:flex;gap:10px;align-items:start;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .step:last-child{border-bottom:0}
+  .step .n{flex:none;width:22px;height:22px;border-radius:99px;background:#1f6feb;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+  .badge{display:inline-block;padding:1px 7px;font-size:11px;border-radius:99px;background:#1e252d;color:var(--muted);margin-left:4px}
+  .badge.green{background:#0d2818;color:var(--good)}
+  .badge.purple{background:#1f1530;color:var(--purple)}
+  .tx-table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .tx-table td,.tx-table th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left}
+  .tx-table th{color:var(--muted);font-weight:500}
+  .login-box{display:flex;gap:6px;margin-top:6px}
+  .login-box input,.login-box select{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:6px;border-radius:4px;font-size:12.5px}
+  .login-result{margin-top:8px;padding:8px;border-radius:4px;font-size:12.5px;font-family:ui-monospace,Consolas,monospace}
+  .login-result.ok{background:#0d2818;color:var(--good)}
+  .login-result.fail{background:#2d1517;color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>POC 28 · Account Merge</h1>
+    <div class="sub">Soft merge, conflict resolution, cross-table FK migration, redirect-by-login</div>
+  </div>
+  <div>
+    <button class="btn ghost" onclick="loadAll()">↻ Refresh</button>
+    <button class="btn danger" onclick="reset()">Reset seed</button>
+  </div>
+</header>
+<main>
+
+<div class="row">
+  <div class="panel">
+    <h2>Users in DB</h2>
+    <div id="users"></div>
+  </div>
+  <div class="panel">
+    <h2>What happens when you click "Merge"</h2>
+    <div class="step"><div class="n">1</div><div><b>Preview conflicts</b> — diff every field, count rows across <code>auth_methods</code>, <code>trade_orders</code>, <code>watchlists</code>.</div></div>
+    <div class="step"><div class="n">2</div><div><b>Pick winners</b> — for each conflicting field, the operator (or UI) picks which value survives on the merged user.</div></div>
+    <div class="step"><div class="n">3</div><div><b>Reassign FKs</b> — single transaction: <code>UPDATE auth_methods SET user_id = target WHERE user_id = source</code> across every FK table.</div></div>
+    <div class="step"><div class="n">4</div><div><b>Soft-mark loser</b> — source user becomes <code>MERGED_REDIRECT</code> with <code>merged_into_user_id = target</code>. Never deleted.</div></div>
+    <div class="step"><div class="n">5</div><div><b>Login redirect</b> — a Google OAuth login still resolves the old user row, which then redirects to the surviving account.</div></div>
+  </div>
+</div>
+
+<div class="row" id="merge-row" style="display:none">
+  <div class="panel" style="grid-column: 1 / -1">
+    <h2>Merge plan</h2>
+    <div id="conflicts"></div>
+    <div style="margin-top:10px">
+      <button class="btn" onclick="executeMerge()">Execute merge →</button>
+      <button class="btn ghost" onclick="cancelMerge()">Cancel</button>
+    </div>
+    <div id="result"></div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="panel">
+    <h2>Simulate login (after merge)</h2>
+    <div class="sub" style="margin-bottom:8px">Pick an auth method that belonged to the merged-away user. Watch it resolve to the survivor.</div>
+    <div class="login-box">
+      <select id="login-provider">
+        <option value="GOOGLE">GOOGLE</option>
+        <option value="EMAIL_PASSWORD">EMAIL_PASSWORD</option>
+      </select>
+      <input id="login-extid" placeholder="external id (e.g. g-104782311)" style="flex:1">
+      <button class="btn" onclick="simulateLogin()">Resolve →</button>
+    </div>
+    <div id="login-result"></div>
+  </div>
+  <div class="panel">
+    <h2>Audit log</h2>
+    <div class="sub" style="margin-bottom:8px">For user: <input id="audit-uid" type="number" value="2" style="width:60px;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:3px 6px;border-radius:4px"> <button class="btn ghost" onclick="loadAudit()">Fetch</button></div>
+    <pre id="audit"></pre>
+  </div>
+</div>
+
+</main>
+<script>
+const API = '/api/merge';
+let preview = null;
+let chosen = {};
+
+async function loadAll() {
+  const r = await fetch(`${API}/users`);
+  const users = await r.json();
+  const wrap = document.getElementById('users');
+  wrap.innerHTML = '';
+  users.forEach(u => {
+    const merged = u.status === 'MERGED_REDIRECT';
+    const card = document.createElement('div');
+    card.className = 'user-card ' + (merged ? 'merged' : 'active');
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><b>${escape(u.displayName)}</b> <span class="uid">id=${u.id}</span></div>
+        <div>${merged
+          ? `<span class="badge purple">MERGED → user ${u.mergedIntoUserId}</span>`
+          : `<span class="badge green">ACTIVE</span>`}</div>
+      </div>
+      <div class="field"><span>email</span><span>${escape(u.primaryEmail)}</span></div>
+      <div class="field"><span>phone</span><span>${escape(u.phone)}</span></div>
+      <div class="field"><span>auth methods</span><span>${u.authMethods.map(a=>a.provider).join(', ') || '—'}</span></div>
+      <div class="field"><span>orders</span><span>${u.orders}</span></div>
+      <div class="field"><span>watchlists</span><span>${u.watchlists}</span></div>
+    `;
+    if (!merged) {
+      const others = users.filter(o => o.id !== u.id && o.status === 'ACTIVE');
+      others.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = `Merge into "${t.displayName}" →`;
+        btn.onclick = () => previewMerge(u.id, t.id);
+        card.appendChild(btn);
+      });
+    }
+    wrap.appendChild(card);
+  });
+}
+
+async function previewMerge(source, target) {
+  const r = await fetch(`${API}/preview?source=${source}&target=${target}`);
+  preview = await r.json();
+  chosen = {};
+  const conflictsEl = document.getElementById('conflicts');
+  const sub = `Source <b>user ${preview.sourceUserId}</b> (${preview.sourceRows} rows) → Target <b>user ${preview.targetUserId}</b> (${preview.targetRows} rows)`;
+  let html = `<div style="color:var(--muted);font-size:13px;margin-bottom:8px">${sub}</div>`;
+  if (preview.conflicts.length === 0) {
+    html += `<div class="conflict"><h4>No field conflicts</h4><div style="color:var(--muted);font-size:12.5px">All field values match — merge is straightforward.</div></div>`;
+  } else {
+    html += `<div class="conflict"><h4>${preview.conflicts.length} field conflict(s) — pick which value survives</h4>`;
+    preview.conflicts.forEach(c => {
+      chosen[c.field] = c.targetValue;
+      html += `<div class="conflict-row">
+        <span style="color:var(--muted)">${c.field}</span>
+        <label data-f="${c.field}" data-v="src">
+          <input type="radio" name="cf-${c.field}" onchange="pick('${c.field}', this.dataset.v, '${escape(c.sourceValue).replace(/'/g,"\\'")}')">
+          <span style="color:var(--warn)">source:</span> ${escape(c.sourceValue)}
+        </label>
+        <label data-f="${c.field}" data-v="tgt" class="selected">
+          <input type="radio" name="cf-${c.field}" checked onchange="pick('${c.field}', this.dataset.v, '${escape(c.targetValue).replace(/'/g,"\\'")}')">
+          <span style="color:var(--accent)">target:</span> ${escape(c.targetValue)}
+        </label>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  conflictsEl.innerHTML = html;
+  document.getElementById('merge-row').style.display = '';
+  document.getElementById('result').innerHTML = '';
+  window.scrollTo({top: 9999, behavior:'smooth'});
+}
+
+function pick(field, v, val) {
+  chosen[field] = val;
+  document.querySelectorAll(`label[data-f="${field}"]`).forEach(l => {
+    l.classList.toggle('selected', l.dataset.v === v);
+  });
+}
+
+function cancelMerge() {
+  document.getElementById('merge-row').style.display = 'none';
+  preview = null;
+}
+
+async function executeMerge() {
+  const req = {
+    sourceUserId: preview.sourceUserId,
+    targetUserId: preview.targetUserId,
+    winningEmail: chosen.primaryEmail ?? null,
+    winningDisplayName: chosen.displayName ?? null,
+    winningPhone: chosen.phone ?? null
+  };
+  const r = await fetch(`${API}/execute`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(req)});
+  const out = await r.json();
+  document.getElementById('result').innerHTML = `
+    <div style="margin-top:10px;padding:10px;background:#0d2818;border-radius:6px;color:var(--good);font-size:13px">
+      ✓ Merged. <b>user ${out.redirectedUserId}</b> redirects to <b>user ${out.survivingUserId}</b>.
+      Reassigned: ${Object.entries(out.rowsReassigned).map(([t,n])=>`${t}=${n}`).join(', ')}.
+      Conflicts resolved: ${out.conflictsResolved}.
+    </div>
+    <pre>${escape(JSON.stringify(out, null, 2))}</pre>
+  `;
+  await loadAll();
+}
+
+async function simulateLogin() {
+  const provider = document.getElementById('login-provider').value;
+  const externalId = document.getElementById('login-extid').value.trim();
+  if (!externalId) return;
+  const r = await fetch(`${API}/login`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({provider, externalId})});
+  const body = await r.json();
+  const el = document.getElementById('login-result');
+  if (r.ok) {
+    el.className = 'login-result ok';
+    el.textContent = `✓ ${body.note}`;
+  } else {
+    el.className = 'login-result fail';
+    el.textContent = `✗ ${body.error}`;
+  }
+}
+
+async function loadAudit() {
+  const uid = document.getElementById('audit-uid').value;
+  const r = await fetch(`${API}/audit/${uid}`);
+  const events = await r.json();
+  document.getElementById('audit').textContent = events.length
+    ? events.map(e => `[${e.at}] ${e.action}  —  ${e.detail}`).join('\n')
+    : '(no events)';
+}
+
+async function reset() {
+  await fetch(`${API}/reset`, {method:'POST'});
+  document.getElementById('merge-row').style.display = 'none';
+  document.getElementById('login-result').innerHTML = '';
+  document.getElementById('audit').textContent = '';
+  loadAll();
+}
+
+function escape(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+loadAll();
+</script>
+</body>
+</html>

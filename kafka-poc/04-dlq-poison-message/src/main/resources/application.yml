@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: dlq-poison-message-poc
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+
+server:
+  port: 8104
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    com.claude.kafka.dlq: INFO
+    org.springframework.kafka.retrytopic: INFO

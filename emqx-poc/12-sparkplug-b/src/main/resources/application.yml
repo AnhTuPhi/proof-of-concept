@@ -1,0 +1,25 @@
+server:
+  port: 8112
+
+spring:
+  application.name: poc-12-sparkplug-b
+
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: sparkplug
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  # Sparkplug spec: edge nodes must use a keepalive <= 30s so LWT-driven NDEATH
+  # fires within 45s of a dead link. Don't extend keepalive without
+  # understanding the trade-off.
+  keep-alive-seconds: 30
+  connection-timeout-seconds: 10
+  max-inflight: 100
+  automatic-reconnect: false   # Sparkplug requires fresh NBIRTH on reconnect, not transparent resume
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

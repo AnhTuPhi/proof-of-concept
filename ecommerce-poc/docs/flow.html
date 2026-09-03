@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ecommerce-pocs — flow &amp; demo explainer</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1e242d;
+    --border: #2d333b;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+               line-height: 1.55; }
+  header { padding: 28px 28px 8px; border-bottom: 1px solid var(--border);
+           background: linear-gradient(180deg, #10151b 0%, var(--bg) 100%); }
+  header h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: .3px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  nav.tabs { display: flex; gap: 4px; padding: 12px 28px 0; border-bottom: 1px solid var(--border);
+             background: var(--bg); position: sticky; top: 0; z-index: 3; flex-wrap: wrap; }
+  nav.tabs button { background: transparent; color: var(--muted);
+                    border: 1px solid transparent; border-bottom: none;
+                    padding: 8px 14px; cursor: pointer; font-size: 13px;
+                    border-radius: 6px 6px 0 0; transition: all .15s; }
+  nav.tabs button:hover { color: var(--text); background: var(--panel); }
+  nav.tabs button.active { color: var(--text); background: var(--panel);
+                           border-color: var(--border); border-bottom-color: var(--panel); }
+  main { padding: 24px 28px 60px; max-width: 1200px; margin: 0 auto; }
+  section.poc { display: none; }
+  section.poc.active { display: block; }
+  h2 { margin: 0 0 4px; font-size: 20px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border);
+          border-radius: 10px; padding: 18px 20px; margin: 16px 0; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; color: var(--accent);
+             text-transform: uppercase; letter-spacing: .8px; }
+  .card h3 .num { color: var(--muted); margin-right: 6px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 800px) { .grid-2 { grid-template-columns: 1fr; } }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px;
+        font-size: 13px; }
+  .kv b { color: var(--muted); font-weight: 500; }
+  .stat { display: inline-block; padding: 3px 10px; border-radius: 999px;
+          font: 600 12px var(--mono); background: var(--panel-2); border: 1px solid var(--border); }
+  .stat.ok { color: var(--ok); border-color: rgba(63,185,80,.4); }
+  .stat.bad { color: var(--bad); border-color: rgba(248,81,73,.4); }
+  .stat.warn { color: var(--warn); border-color: rgba(210,153,34,.4); }
+  code, kbd { font-family: var(--mono); font-size: 12.5px;
+              background: var(--panel-2); padding: 1px 6px; border-radius: 4px;
+              border: 1px solid var(--border); }
+  pre { background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 6px; padding: 12px 14px; overflow-x: auto;
+        font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
+  button.run { background: var(--accent); color: #0e1116; border: none;
+               padding: 8px 16px; border-radius: 6px; cursor: pointer;
+               font: 600 13px inherit; }
+  button.run:hover { filter: brightness(1.1); }
+  button.run:disabled { opacity: .5; cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--muted);
+                     border: 1px solid var(--border); padding: 6px 12px;
+                     border-radius: 6px; cursor: pointer; font-size: 12px; }
+  button.secondary:hover { color: var(--text); }
+  .demo-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
+                   flex-wrap: wrap; }
+  .demo-controls label { font-size: 12px; color: var(--muted); }
+  .demo-controls input[type=number] { background: var(--panel-2); color: var(--text);
+                                       border: 1px solid var(--border); border-radius: 4px;
+                                       padding: 4px 8px; width: 80px; font-family: var(--mono);
+                                       font-size: 12px; }
+  .demo-controls select { background: var(--panel-2); color: var(--text);
+                           border: 1px solid var(--border); border-radius: 4px;
+                           padding: 4px 8px; font-size: 12px; }
+  .log { background: #05080b; border: 1px solid var(--border); border-radius: 6px;
+         padding: 10px 12px; font-family: var(--mono); font-size: 12px;
+         max-height: 280px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+  .log .ok { color: var(--ok); }
+  .log .bad { color: var(--bad); }
+  .log .warn { color: var(--warn); }
+  .log .dim { color: var(--muted); }
+  .flow-svg { width: 100%; height: auto; background: #05080b;
+              border: 1px solid var(--border); border-radius: 6px; display: block; }
+  svg .lbl { fill: var(--text); font: 500 13px sans-serif; }
+  svg .lbl-sm { fill: var(--muted); font: 400 11px sans-serif; }
+  svg .box { fill: var(--panel-2); stroke: var(--border); stroke-width: 1.2; }
+  svg .box-ok { fill: rgba(63,185,80,.12); stroke: var(--ok); stroke-width: 1.2; }
+  svg .box-warn { fill: rgba(210,153,34,.12); stroke: var(--warn); stroke-width: 1.2; }
+  svg .box-bad { fill: rgba(248,81,73,.12); stroke: var(--bad); stroke-width: 1.2; }
+  svg .arrow { stroke: var(--muted); stroke-width: 1.2; fill: none;
+               marker-end: url(#arrowhead); }
+  svg .arrow-strong { stroke: var(--accent); stroke-width: 1.6; fill: none;
+                      marker-end: url(#arrowheadA); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table th { color: var(--muted); font-weight: 500; }
+  table.mono td:not(:first-child) { font-family: var(--mono); font-size: 12.5px; }
+  .buckets { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
+             margin: 8px 0; }
+  .bucket { background: var(--panel-2); border: 1px solid var(--border);
+            border-radius: 6px; padding: 8px 6px; text-align: center;
+            font: 600 15px var(--mono); position: relative;
+            transition: background .15s; }
+  .bucket.hot { background: rgba(210,153,34,.18); border-color: var(--warn); }
+  .bucket.empty { color: var(--bad); opacity: .5; }
+  .bucket small { display: block; color: var(--muted); font-size: 10px; font-weight: 400; }
+  .footer { color: var(--muted); font-size: 12px; text-align: center;
+            margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ecommerce-pocs &mdash; flow &amp; demo explainer</h1>
+  <p>Five focused POCs for the hard, contended parts of an e-commerce backend.
+     Click a tab. Run the demo. Read the tech breakdown.</p>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="overview" class="active">Overview</button>
+  <button data-tab="inventory">1. Reservation</button>
+  <button data-tab="oversell">2. Oversell</button>
+  <button data-tab="flashsale">3. Flash sale</button>
+  <button data-tab="coupon">4. Coupon</button>
+  <button data-tab="fulfillment">5. Fulfillment</button>
+  <button data-tab="k8s">Scaling on k8s</button>
+</nav>
+
+<main>
+
+<!-- ============================ OVERVIEW ============================ -->
+<section class="poc active" id="overview">
+  <h2>The five POCs at a glance</h2>
+  <p class="subtitle">One JVM, no external deps. Each POC isolates a real
+     backend failure mode and shows the correct primitive next to the naive one.</p>
+
+  <div class="card">
+    <h3>Map</h3>
+    <table>
+      <tr><th>#</th><th>POC</th><th>Symptom in prod</th><th>Winning primitive</th></tr>
+      <tr><td>1</td><td>Reservation</td>
+          <td>Cart holds leak / two users get the same unit</td>
+          <td>CAS on stock + CAS on reservation status + TTL sweeper</td></tr>
+      <tr><td>2</td><td>Oversell</td>
+          <td>Sold 12 of a 10-unit SKU</td>
+          <td>Atomic CAS loop (or queue-serialised for rich rules)</td></tr>
+      <tr><td>3</td><td>Flash sale</td>
+          <td>100k RPS → site freeze / oversell</td>
+          <td>Admission gate + N-bucket sharded stock</td></tr>
+      <tr><td>4</td><td>Coupon</td>
+          <td>"Why did my discount change?"</td>
+          <td>Stage-ordered sealed hierarchy + audit trail</td></tr>
+      <tr><td>5</td><td>Fulfillment</td>
+          <td>4 boxes to save ₫5k, ops pays ₫80k extra</td>
+          <td>Branch-and-bound with SPLIT_PENALTY scalar</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>System-wide flow</h3>
+    <svg class="flow-svg" viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#8b949e"/>
+        </marker>
+        <marker id="arrowheadA" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#58a6ff"/>
+        </marker>
+      </defs>
+      <text class="lbl-sm" x="20" y="20">shopper</text>
+      <rect class="box" x="20" y="30" width="120" height="50" rx="6"/>
+      <text class="lbl" x="80" y="60" text-anchor="middle">Browse</text>
+
+      <rect class="box box-warn" x="180" y="30" width="140" height="50" rx="6"/>
+      <text class="lbl" x="250" y="52" text-anchor="middle">3. Flash sale gate</text>
+      <text class="lbl-sm" x="250" y="70" text-anchor="middle">admission + queue</text>
+
+      <rect class="box box-ok" x="360" y="30" width="140" height="50" rx="6"/>
+      <text class="lbl" x="430" y="52" text-anchor="middle">1. Reserve stock</text>
+      <text class="lbl-sm" x="430" y="70" text-anchor="middle">TTL hold</text>
+
+      <rect class="box box-ok" x="540" y="30" width="140" height="50" rx="6"/>
+      <text class="lbl" x="610" y="52" text-anchor="middle">2. Oversell guard</text>
+      <text class="lbl-sm" x="610" y="70" text-anchor="middle">atomic CAS</text>
+
+      <rect class="box" x="720" y="30" width="140" height="50" rx="6"/>
+      <text class="lbl" x="790" y="52" text-anchor="middle">Cart</text>
+
+      <path class="arrow" d="M140 55 L180 55"/>
+      <path class="arrow" d="M320 55 L360 55"/>
+      <path class="arrow" d="M500 55 L540 55"/>
+      <path class="arrow" d="M680 55 L720 55"/>
+
+      <rect class="box box-ok" x="180" y="130" width="140" height="50" rx="6"/>
+      <text class="lbl" x="250" y="152" text-anchor="middle">4. Coupon engine</text>
+      <text class="lbl-sm" x="250" y="170" text-anchor="middle">stages + audit</text>
+
+      <rect class="box" x="360" y="130" width="140" height="50" rx="6"/>
+      <text class="lbl" x="430" y="152" text-anchor="middle">Payment</text>
+      <text class="lbl-sm" x="430" y="170" text-anchor="middle">out of scope</text>
+
+      <rect class="box box-ok" x="540" y="130" width="140" height="50" rx="6"/>
+      <text class="lbl" x="610" y="152" text-anchor="middle">1. Confirm reserve</text>
+      <text class="lbl-sm" x="610" y="170" text-anchor="middle">CAS ACTIVE→CONFIRMED</text>
+
+      <rect class="box box-ok" x="720" y="130" width="140" height="50" rx="6"/>
+      <text class="lbl" x="790" y="152" text-anchor="middle">5. Route</text>
+      <text class="lbl-sm" x="790" y="170" text-anchor="middle">warehouses → shipments</text>
+
+      <path class="arrow" d="M790 80 L790 130"/>
+      <path class="arrow-strong" d="M790 180 L790 210 L500 210 L500 240"/>
+
+      <rect class="box" x="380" y="240" width="240" height="50" rx="6"/>
+      <text class="lbl" x="500" y="262" text-anchor="middle">Warehouse / carrier</text>
+      <text class="lbl-sm" x="500" y="280" text-anchor="middle">happy shopper</text>
+
+      <path class="arrow" d="M250 80 L250 130"/>
+      <path class="arrow" d="M320 155 L360 155"/>
+      <path class="arrow" d="M500 155 L540 155"/>
+      <path class="arrow" d="M680 155 L720 155"/>
+    </svg>
+    <p class="subtitle">Boxes in green are covered by these POCs.
+       The flash-sale layer is upstream of everything; coupon and routing are
+       downstream of "reserve + confirm".</p>
+  </div>
+</section>
+
+<!-- ============================ POC 1 ============================ -->
+<section class="poc" id="inventory">
+  <h2>POC 1 &mdash; Reservation with TTL</h2>
+  <p class="subtitle">Cart adds are temporary claims on stock. Confirm, release,
+     or expire &mdash; exactly one wins.</p>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Flow</h3>
+      <svg class="flow-svg" viewBox="0 0 400 320" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah1" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <polygon points="0 0, 10 4, 0 8" fill="#8b949e"/>
+          </marker>
+        </defs>
+        <rect class="box box-warn" x="20" y="20" width="140" height="46" rx="6"/>
+        <text class="lbl" x="90" y="46" text-anchor="middle">stock pool</text>
+        <text class="lbl-sm" x="90" y="60" text-anchor="middle">AtomicInteger</text>
+
+        <rect class="box box-ok" x="230" y="130" width="150" height="46" rx="6"/>
+        <text class="lbl" x="305" y="156" text-anchor="middle">ACTIVE</text>
+        <text class="lbl-sm" x="305" y="170" text-anchor="middle">id, user, ttl</text>
+
+        <rect class="box" x="230" y="20" width="150" height="30" rx="6"/>
+        <text class="lbl-sm" x="305" y="40" text-anchor="middle">CONFIRMED</text>
+
+        <rect class="box" x="230" y="220" width="150" height="30" rx="6"/>
+        <text class="lbl-sm" x="305" y="240" text-anchor="middle">RELEASED</text>
+
+        <rect class="box" x="230" y="270" width="150" height="30" rx="6"/>
+        <text class="lbl-sm" x="305" y="290" text-anchor="middle">EXPIRED</text>
+
+        <path stroke="#8b949e" stroke-width="1.2" fill="none" marker-end="url(#ah1)"
+              d="M160 46 C 200 46, 200 152, 230 152"/>
+        <text class="lbl-sm" x="175" y="90">reserve(qty)</text>
+        <text class="lbl-sm" x="175" y="104">CAS decrement</text>
+
+        <path stroke="#8b949e" stroke-width="1.2" fill="none" marker-end="url(#ah1)" d="M300 130 L300 50"/>
+        <text class="lbl-sm" x="308" y="90">confirm()</text>
+
+        <path stroke="#8b949e" stroke-width="1.2" fill="none" marker-end="url(#ah1)" d="M300 176 L300 220"/>
+        <text class="lbl-sm" x="308" y="205">release()</text>
+
+        <path stroke="#8b949e" stroke-width="1.2" fill="none" marker-end="url(#ah1)" d="M270 176 L270 270"/>
+        <text class="lbl-sm" x="230" y="215">TTL sweeper</text>
+
+        <path stroke="#3fb950" stroke-width="1.5" fill="none" marker-end="url(#ah1)"
+              d="M225 240 C 100 240, 60 240, 60 70"/>
+        <text class="lbl-sm" x="90" y="270">qty back to pool</text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <h3>Key tech by responsibility</h3>
+      <div class="kv">
+        <b>Atomic check + decrement</b><div><code>AtomicInteger</code> CAS loop</div>
+        <b>Reservation registry</b><div><code>ConcurrentHashMap&lt;id, Reservation&gt;</code></div>
+        <b>Terminal-state CAS</b><div><code>Map.replace(k, oldRef, newRef)</code></div>
+        <b>Abandonment cleanup</b><div><code>ScheduledExecutorService</code> @ 200 ms</div>
+        <b>Immutable value</b><div>Java <code>record</code> with <code>withStatus()</code></div>
+      </div>
+      <h3 style="margin-top:16px;">Invariant we protect</h3>
+      <p style="margin:0;font-size:13px;">Every reservation reaches exactly one
+      of <span class="stat ok">CONFIRMED</span>
+      <span class="stat">RELEASED</span>
+      <span class="stat warn">EXPIRED</span>. Stock returns to the pool iff
+      RELEASED or EXPIRED.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Demo &mdash; race N users for 1 unit</h3>
+    <div class="demo-controls">
+      <label>users <input type="number" id="inv-users" value="1000" min="1" max="100000"></label>
+      <label>stock <input type="number" id="inv-stock" value="1" min="1" max="100"></label>
+      <label>abandon% <input type="number" id="inv-abandon" value="20" min="0" max="100"></label>
+      <button class="run" id="inv-run">Run</button>
+      <button class="secondary" id="inv-clear">Clear</button>
+    </div>
+    <div id="inv-log" class="log">Ready.</div>
+  </div>
+</section>
+
+<!-- ============================ POC 2 ============================ -->
+<section class="poc" id="oversell">
+  <h2>POC 2 &mdash; Oversell prevention strategies</h2>
+  <p class="subtitle">1000 concurrent buyers, 10 units. Race five strategies
+     and see which oversell and which don't.</p>
+
+  <div class="card">
+    <h3>The bug the naive strategy shows</h3>
+    <pre>if (stock &gt;= qty) {         // ← thread A reads 1
+    // any work here...     // ← thread B also reads 1, both pass the check
+    stock -= qty;           // ← both write, sold=2, stock=-1
+}</pre>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0 0;">
+       This bug reproduces once every ~10k requests in staging. Nobody
+       catches it until prod day.</p>
+  </div>
+
+  <div class="card">
+    <h3>Strategy comparison &mdash; live simulation</h3>
+    <div class="demo-controls">
+      <label>buyers <input type="number" id="ov-buyers" value="1000" min="10" max="20000"></label>
+      <label>stock <input type="number" id="ov-stock" value="10" min="1" max="1000"></label>
+      <button class="run" id="ov-run">Run all strategies</button>
+      <button class="secondary" id="ov-clear">Clear</button>
+    </div>
+    <div id="ov-log" class="log">Ready.</div>
+  </div>
+
+  <div class="card">
+    <h3>Trade-offs</h3>
+    <table>
+      <tr><th>Strategy</th><th>Correct?</th><th>Scales?</th><th>Prod analogue</th></tr>
+      <tr><td>Naive read-then-write</td><td><span class="stat bad">NO</span></td><td>—</td><td>—</td></tr>
+      <tr><td>Synchronized monitor</td><td><span class="stat ok">yes</span></td><td><span class="stat bad">no</span></td><td>Row-level <code>SELECT ... FOR UPDATE</code></td></tr>
+      <tr><td>Atomic CAS loop</td><td><span class="stat ok">yes</span></td><td><span class="stat ok">yes</span></td><td>Redis Lua / <code>UPDATE ... WHERE stock &gt;= ?</code></td></tr>
+      <tr><td>Optimistic <code>@Version</code></td><td><span class="stat ok">yes</span></td><td><span class="stat warn">meh</span></td><td>JPA <code>@Version</code></td></tr>
+      <tr><td>Queue-serialised</td><td><span class="stat ok">yes</span></td><td><span class="stat ok">yes</span></td><td>Kafka partitioned by SKU</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============================ POC 3 ============================ -->
+<section class="poc" id="flashsale">
+  <h2>POC 3 &mdash; Flash sale</h2>
+  <p class="subtitle">100k requests, 100 units. Two independent layers:
+     admission gate + bucketed inventory.</p>
+
+  <div class="card">
+    <h3>Flow &mdash; cheapest layer first</h3>
+    <svg class="flow-svg" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah3" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#8b949e"/>
+        </marker>
+      </defs>
+      <text class="lbl-sm" x="20" y="30">100,000 requests</text>
+      <rect class="box" x="20" y="40" width="140" height="60" rx="6"/>
+      <text class="lbl" x="90" y="66" text-anchor="middle">users + bots</text>
+      <text class="lbl-sm" x="90" y="84" text-anchor="middle">"F5 warriors"</text>
+
+      <rect class="box box-warn" x="200" y="10" width="200" height="120" rx="8"/>
+      <text class="lbl" x="300" y="34" text-anchor="middle">AdmissionGate</text>
+      <text class="lbl-sm" x="300" y="52" text-anchor="middle">— per-user rate limit</text>
+      <text class="lbl-sm" x="300" y="68" text-anchor="middle">— virtual queue (K in-flight)</text>
+      <text class="lbl-sm" x="300" y="90" text-anchor="middle">drops bots / holds herd</text>
+
+      <path class="arrow" d="M160 70 L200 70"/>
+      <path stroke="#f85149" stroke-width="1.2" fill="none" marker-end="url(#ah3)" d="M400 40 L440 40"/>
+      <text class="lbl-sm" x="440" y="30">rate-limit drop</text>
+      <path stroke="#d29922" stroke-width="1.2" fill="none" marker-end="url(#ah3)" d="M400 100 L440 100"/>
+      <text class="lbl-sm" x="440" y="120">"you are #4523"</text>
+
+      <rect class="box box-ok" x="600" y="30" width="270" height="200" rx="8"/>
+      <text class="lbl" x="735" y="52" text-anchor="middle">BucketedInventory (16 buckets)</text>
+      <text class="lbl-sm" x="735" y="66" text-anchor="middle">100 units split ~6/bucket, CAS spread</text>
+
+      <path stroke="#58a6ff" stroke-width="1.6" fill="none" marker-end="url(#ah3)" d="M400 70 L600 70"/>
+      <text class="lbl-sm" x="500" y="60">admitted (~5%)</text>
+
+      <g transform="translate(620,90)">
+        <rect class="box" x="0"   y="0" width="50" height="30" rx="4"/><text class="lbl" x="25" y="20" text-anchor="middle">6</text>
+        <rect class="box" x="60"  y="0" width="50" height="30" rx="4"/><text class="lbl" x="85" y="20" text-anchor="middle">6</text>
+        <rect class="box" x="120" y="0" width="50" height="30" rx="4"/><text class="lbl" x="145" y="20" text-anchor="middle">6</text>
+        <rect class="box" x="180" y="0" width="50" height="30" rx="4"/><text class="lbl" x="205" y="20" text-anchor="middle">6</text>
+        <rect class="box" x="0"   y="40" width="50" height="30" rx="4"/><text class="lbl" x="25" y="60" text-anchor="middle">6</text>
+        <rect class="box" x="60"  y="40" width="50" height="30" rx="4"/><text class="lbl" x="85" y="60" text-anchor="middle">6</text>
+        <rect class="box" x="120" y="40" width="50" height="30" rx="4"/><text class="lbl" x="145" y="60" text-anchor="middle">6</text>
+        <rect class="box" x="180" y="40" width="50" height="30" rx="4"/><text class="lbl" x="205" y="60" text-anchor="middle">6</text>
+        <rect class="box" x="0"   y="80" width="50" height="30" rx="4"/><text class="lbl" x="25" y="100" text-anchor="middle">6</text>
+        <rect class="box" x="60"  y="80" width="50" height="30" rx="4"/><text class="lbl" x="85" y="100" text-anchor="middle">6</text>
+        <rect class="box" x="120" y="80" width="50" height="30" rx="4"/><text class="lbl" x="145" y="100" text-anchor="middle">7</text>
+        <rect class="box" x="180" y="80" width="50" height="30" rx="4"/><text class="lbl" x="205" y="100" text-anchor="middle">7</text>
+        <rect class="box" x="0"   y="120" width="50" height="30" rx="4"/><text class="lbl" x="25" y="140" text-anchor="middle">7</text>
+        <rect class="box" x="60"  y="120" width="50" height="30" rx="4"/><text class="lbl" x="85" y="140" text-anchor="middle">7</text>
+        <rect class="box" x="120" y="120" width="50" height="30" rx="4"/><text class="lbl" x="145" y="140" text-anchor="middle">7</text>
+        <rect class="box" x="180" y="120" width="50" height="30" rx="4"/><text class="lbl" x="205" y="140" text-anchor="middle">7</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h3>Live bucket simulation</h3>
+    <div class="demo-controls">
+      <label>requests <input type="number" id="fs-req" value="10000" min="100" max="200000"></label>
+      <label>units <input type="number" id="fs-units" value="100" min="1" max="10000"></label>
+      <label>buckets
+        <select id="fs-buckets">
+          <option>1</option><option>2</option><option>4</option>
+          <option selected>16</option><option>32</option><option>64</option>
+        </select>
+      </label>
+      <label>gate?
+        <select id="fs-gate">
+          <option value="on" selected>on</option>
+          <option value="off">off</option>
+        </select>
+      </label>
+      <button class="run" id="fs-run">Run flash sale</button>
+      <button class="secondary" id="fs-clear">Clear</button>
+    </div>
+    <div class="buckets" id="fs-buckets-view"></div>
+    <div id="fs-log" class="log">Ready. Adjust buckets to see contention drop.</div>
+  </div>
+</section>
+
+<!-- ============================ POC 4 ============================ -->
+<section class="poc" id="coupon">
+  <h2>POC 4 &mdash; Coupon engine</h2>
+  <p class="subtitle">Stage-ordered application, symmetric stackability,
+     audit trail per coupon, brute-force best-combo finder.</p>
+
+  <div class="card">
+    <h3>Stage order (globally deterministic)</h3>
+    <svg class="flow-svg" viewBox="0 0 900 140" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah4" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#58a6ff"/>
+        </marker>
+      </defs>
+      <rect class="box box-ok" x="20" y="30" width="180" height="70" rx="6"/>
+      <text class="lbl" x="110" y="55" text-anchor="middle">PERCENT_ON_SUBTOTAL</text>
+      <text class="lbl-sm" x="110" y="72" text-anchor="middle">order 10</text>
+      <text class="lbl-sm" x="110" y="88" text-anchor="middle">e.g. "10% off"</text>
+
+      <path stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#ah4)" d="M200 65 L230 65"/>
+
+      <rect class="box box-ok" x="230" y="30" width="180" height="70" rx="6"/>
+      <text class="lbl" x="320" y="55" text-anchor="middle">CATEGORY_PERCENT</text>
+      <text class="lbl-sm" x="320" y="72" text-anchor="middle">order 20</text>
+      <text class="lbl-sm" x="320" y="88" text-anchor="middle">e.g. "15% off phones"</text>
+
+      <path stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#ah4)" d="M410 65 L440 65"/>
+
+      <rect class="box box-ok" x="440" y="30" width="180" height="70" rx="6"/>
+      <text class="lbl" x="530" y="55" text-anchor="middle">FIXED_AMOUNT</text>
+      <text class="lbl-sm" x="530" y="72" text-anchor="middle">order 30</text>
+      <text class="lbl-sm" x="530" y="88" text-anchor="middle">e.g. "-₫50k"</text>
+
+      <path stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#ah4)" d="M620 65 L650 65"/>
+
+      <rect class="box box-ok" x="650" y="30" width="180" height="70" rx="6"/>
+      <text class="lbl" x="740" y="55" text-anchor="middle">SHIPPING</text>
+      <text class="lbl-sm" x="740" y="72" text-anchor="middle">order 40</text>
+      <text class="lbl-sm" x="740" y="88" text-anchor="middle">e.g. "free ship"</text>
+    </svg>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0 0;">
+       Change the enum order → change the discount policy globally.
+       One place, obvious diff, auditable.</p>
+  </div>
+
+  <div class="card">
+    <h3>Try it &mdash; apply coupons to a cart</h3>
+    <div class="demo-controls">
+      <label><input type="checkbox" class="c-cb" data-c="PERCENT10" checked> PERCENT10 (10% off, cap ₫500k)</label>
+      <label><input type="checkbox" class="c-cb" data-c="PERCENT5"> PERCENT5 (5% off, cap ₫200k)</label>
+      <label><input type="checkbox" class="c-cb" data-c="PHONES15"> PHONES15 (15% off phones)</label>
+      <label><input type="checkbox" class="c-cb" data-c="MINUS50K" checked> MINUS50K (-₫50k, min ₫1M)</label>
+      <label><input type="checkbox" class="c-cb" data-c="FREESHIP" checked> FREESHIP (-shipping)</label>
+    </div>
+    <div class="demo-controls">
+      <button class="run" id="cp-apply">Apply</button>
+      <button class="secondary" id="cp-best">Auto-find best combo</button>
+    </div>
+    <div id="cp-log" class="log">Cart: iPhone 25M + Samsung 22M + 2×case 350k. Shipping ₫30k.</div>
+  </div>
+</section>
+
+<!-- ============================ POC 5 ============================ -->
+<section class="poc" id="fulfillment">
+  <h2>POC 5 &mdash; Multi-warehouse routing</h2>
+  <p class="subtitle">Greedy per-line picks the cheapest warehouse for each line
+     and happily splits into 4 shipments. Optimal adds a split penalty and
+     picks what ops actually wants.</p>
+
+  <div class="card">
+    <h3>Same order, two routers</h3>
+    <svg class="flow-svg" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah5" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#8b949e"/>
+        </marker>
+      </defs>
+      <rect class="box" x="20" y="100" width="150" height="50" rx="6"/>
+      <text class="lbl" x="95" y="122" text-anchor="middle">Order ORD-1001</text>
+      <text class="lbl-sm" x="95" y="140" text-anchor="middle">SKU-A ×2, B ×1, C ×1</text>
+
+      <rect class="box box-warn" x="220" y="20" width="200" height="90" rx="6"/>
+      <text class="lbl" x="320" y="44" text-anchor="middle">GreedyRouter</text>
+      <text class="lbl-sm" x="320" y="62" text-anchor="middle">for each line: cheapest first</text>
+      <text class="lbl-sm" x="320" y="80" text-anchor="middle">3 shipments · ₫74k</text>
+      <text class="lbl-sm" x="320" y="98" text-anchor="middle" fill="#f85149">unhappy customer</text>
+
+      <rect class="box box-ok" x="220" y="140" width="200" height="90" rx="6"/>
+      <text class="lbl" x="320" y="164" text-anchor="middle">OptimalRouter</text>
+      <text class="lbl-sm" x="320" y="182" text-anchor="middle">score = cost + splits×100k</text>
+      <text class="lbl-sm" x="320" y="200" text-anchor="middle">1 shipment · ₫82k</text>
+      <text class="lbl-sm" x="320" y="218" text-anchor="middle" fill="#3fb950">ops policy wins</text>
+
+      <path class="arrow" d="M170 120 L220 65"/>
+      <path class="arrow" d="M170 130 L220 185"/>
+
+      <text class="lbl-sm" x="470" y="30">warehouse pool</text>
+      <rect class="box" x="470" y="40" width="400" height="40" rx="6"/>
+      <text class="lbl-sm" x="670" y="65" text-anchor="middle">HN-01 · DN-01 · HCM-01 · HCM-02</text>
+
+      <rect class="box" x="470" y="130" width="90" height="60" rx="6"/>
+      <text class="lbl-sm" x="515" y="150" text-anchor="middle">HN-01</text>
+      <text class="lbl-sm" x="515" y="166" text-anchor="middle" fill="#f85149">SKU-A ×1</text>
+      <rect class="box" x="570" y="130" width="90" height="60" rx="6"/>
+      <text class="lbl-sm" x="615" y="150" text-anchor="middle">HCM-01</text>
+      <text class="lbl-sm" x="615" y="166" text-anchor="middle" fill="#f85149">B ×1, C ×1</text>
+      <rect class="box" x="670" y="130" width="90" height="60" rx="6"/>
+      <text class="lbl-sm" x="715" y="150" text-anchor="middle">HCM-01</text>
+      <text class="lbl-sm" x="715" y="166" text-anchor="middle" fill="#f85149">SKU-A ×1</text>
+      <text class="lbl-sm" x="615" y="205" text-anchor="middle">(greedy: 3 boxes)</text>
+
+      <rect class="box box-ok" x="770" y="130" width="90" height="60" rx="6"/>
+      <text class="lbl-sm" x="815" y="150" text-anchor="middle">HCM-01</text>
+      <text class="lbl-sm" x="815" y="166" text-anchor="middle" fill="#3fb950">everything</text>
+      <text class="lbl-sm" x="815" y="205" text-anchor="middle">(optimal: 1 box)</text>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h3>Score model</h3>
+    <pre>score = totalCost + (shipments - 1) × SPLIT_PENALTY
+
+// SPLIT_PENALTY = 100,000 VND ← one place to tune the ops policy</pre>
+    <p style="font-size:13px;color:var(--muted);margin:8px 0 0;">
+       A single ₫82k shipment beats "two ₫37k shipments" because
+       <code>82k &lt; 37k + 37k + 100k</code>.  Ops can change the constant
+       without a code review.</p>
+  </div>
+</section>
+
+<!-- ============================ k8s ============================ -->
+<section class="poc" id="k8s">
+  <h2>Scaling on Kubernetes</h2>
+  <p class="subtitle">Every in-memory primitive lies at N-pod scale. Here's
+     what moves where. Full detail in <code>CONSISTENCY.md</code>.</p>
+
+  <div class="card">
+    <h3>The problem in one picture</h3>
+    <svg class="flow-svg" viewBox="0 0 900 240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah6" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#8b949e"/>
+        </marker>
+      </defs>
+      <rect class="box" x="20" y="90" width="90" height="50" rx="6"/>
+      <text class="lbl" x="65" y="120" text-anchor="middle">LB</text>
+
+      <rect class="box box-bad" x="180" y="30" width="180" height="60" rx="6"/>
+      <text class="lbl" x="270" y="52" text-anchor="middle">pod-A</text>
+      <text class="lbl-sm" x="270" y="70" text-anchor="middle">stock = 10 (local)</text>
+
+      <rect class="box box-bad" x="180" y="110" width="180" height="60" rx="6"/>
+      <text class="lbl" x="270" y="132" text-anchor="middle">pod-B</text>
+      <text class="lbl-sm" x="270" y="150" text-anchor="middle">stock = 10 (local)</text>
+
+      <path class="arrow" d="M110 100 L180 60"/>
+      <path class="arrow" d="M110 130 L180 140"/>
+
+      <text class="lbl-sm" x="380" y="55">sells 10</text>
+      <text class="lbl-sm" x="380" y="135">sells 10</text>
+
+      <rect class="box box-bad" x="470" y="80" width="220" height="80" rx="6"/>
+      <text class="lbl" x="580" y="106" text-anchor="middle">warehouse ships 20</text>
+      <text class="lbl-sm" x="580" y="126" text-anchor="middle">only 10 exist</text>
+      <text class="lbl-sm" x="580" y="144" text-anchor="middle" fill="#f85149">oversold!</text>
+
+      <path class="arrow" d="M360 60 L470 100"/>
+      <path class="arrow" d="M360 140 L470 130"/>
+
+      <rect class="box box-ok" x="720" y="80" width="160" height="80" rx="6"/>
+      <text class="lbl" x="800" y="106" text-anchor="middle">fix: Redis</text>
+      <text class="lbl-sm" x="800" y="126" text-anchor="middle">one atomic counter</text>
+      <text class="lbl-sm" x="800" y="144" text-anchor="middle">Lua CAS across pods</text>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h3>One-line mapping</h3>
+    <table class="mono">
+      <tr><th>POC primitive</th><th>Production form</th></tr>
+      <tr><td>AtomicInteger stock</td><td>Redis key + Lua CAS → DB row</td></tr>
+      <tr><td>ConcurrentHashMap reservations</td><td>DB table, source of truth</td></tr>
+      <tr><td>ScheduledExecutorService sweeper</td><td>K8s Lease-elected singleton, or Redis PEXPIRE</td></tr>
+      <tr><td>synchronized monitor</td><td>SELECT ... FOR UPDATE row lock</td></tr>
+      <tr><td>AtomicInteger[] buckets</td><td>N Redis keys stock:{sku}:{0..15}</td></tr>
+      <tr><td>AdmissionGate (per-user)</td><td>Redis token bucket at Envoy / NGINX</td></tr>
+      <tr><td>Queue-serialised worker</td><td>Kafka partitioned by SKU</td></tr>
+      <tr><td>Audit ArrayList</td><td>DB write-through + Kafka analytics topic</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>What Kubernetes gives you &mdash; and what it doesn't</h3>
+    <div class="grid-2">
+      <div>
+        <p style="margin:0 0 6px;color:var(--ok);font-weight:600;">Gives you</p>
+        <ul style="margin:0;padding-left:20px;font-size:13px;">
+          <li>Horizontal replicas + HPA</li>
+          <li>Rolling updates with PDB</li>
+          <li>Readiness / liveness health gates</li>
+          <li>ConfigMaps / Secrets</li>
+          <li>Stable Service DNS in front of pods</li>
+        </ul>
+      </div>
+      <div>
+        <p style="margin:0 0 6px;color:var(--bad);font-weight:600;">Does NOT give you</p>
+        <ul style="margin:0;padding-left:20px;font-size:13px;">
+          <li>Shared state across pods → Redis/DB/Kafka</li>
+          <li>Ordering across pods → idempotency + causal keys</li>
+          <li>Cache warmth on scale-up → prewarm on ready</li>
+          <li>Distributed locks → Redis lock / advisory lock</li>
+          <li>Automatic consistency → reconciliation loops</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  Read alongside <code>ISSUE.md</code>, <code>TECHNICAL.md</code>,
+  <code>CONSISTENCY.md</code>. Source in <code>src/main/java/vn/com/ipas/poc/</code>.
+</div>
+
+</main>
+
+<script>
+// ---- tab switching ----
+const tabs = document.querySelectorAll('#tabs button');
+tabs.forEach(b => b.addEventListener('click', () => {
+  tabs.forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  document.querySelectorAll('section.poc').forEach(s => s.classList.remove('active'));
+  document.getElementById(b.dataset.tab).classList.add('active');
+}));
+
+// ---- log helper ----
+function logTo(id, msg, cls) {
+  const el = document.getElementById(id);
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function clearLog(id) { document.getElementById(id).innerHTML = ''; }
+
+// ================== POC 1 — inventory ==================
+document.getElementById('inv-clear').onclick = () => clearLog('inv-log');
+document.getElementById('inv-run').onclick = () => {
+  clearLog('inv-log');
+  const users = +document.getElementById('inv-users').value;
+  const stock = +document.getElementById('inv-stock').value;
+  const abandonPct = +document.getElementById('inv-abandon').value;
+
+  // Simulate a race: N users try to reserve 1 unit. Winners subset abandon.
+  // CAS-atomic — deterministic winner count.
+  let avail = stock;
+  let winners = 0;
+  const reservations = []; // {id, status}
+  for (let i = 0; i < users; i++) {
+    if (avail > 0) { avail--; winners++; reservations.push({id: i, status:'ACTIVE'}); }
+  }
+  logTo('inv-log', `→ ${users} users raced for ${stock} unit(s)`);
+  logTo('inv-log', `→ winners: ${winners}   losers: ${users - winners}`,
+        winners === stock ? 'ok' : 'bad');
+
+  // Some winners abandon; sweeper reclaims.
+  let abandoned = 0, confirmed = 0;
+  reservations.forEach(r => {
+    if (Math.random() * 100 < abandonPct) { r.status = 'EXPIRED'; abandoned++; avail++; }
+    else { r.status = 'CONFIRMED'; confirmed++; }
+  });
+  logTo('inv-log', `→ ${abandoned} abandoned → TTL sweep returned to pool`, 'warn');
+  logTo('inv-log', `→ ${confirmed} confirmed`, 'ok');
+  logTo('inv-log', `final stock available: ${avail}`);
+  logTo('inv-log', `invariant check: sold==confirmed && stock+confirmed==${stock}`);
+  logTo('inv-log', (confirmed + avail === stock) ? 'PASS ✓' : 'FAIL ✗',
+        (confirmed + avail === stock) ? 'ok' : 'bad');
+};
+
+// ================== POC 2 — oversell ==================
+document.getElementById('ov-clear').onclick = () => clearLog('ov-log');
+document.getElementById('ov-run').onclick = () => {
+  clearLog('ov-log');
+  const buyers = +document.getElementById('ov-buyers').value;
+  const initial = +document.getElementById('ov-stock').value;
+
+  // Naive (with TOCTOU simulation): a fraction of concurrent racers pass the
+  // check but land in the write. We inject one interleaving per contended read.
+  function runNaive() {
+    let stock = initial, sold = 0;
+    // simulate contention: multiple threads see the same pre-write value
+    const threads = 8;
+    let remaining = buyers;
+    while (remaining > 0 && stock > 0) {
+      const contenders = Math.min(threads, remaining);
+      const snapshot = stock;
+      if (snapshot >= 1) {
+        // all threads reading `snapshot` pass the >=1 check
+        const oversell = Math.min(contenders, remaining);
+        stock = snapshot - oversell;   // ← all decrement based on same read
+        sold += oversell;
+      }
+      remaining -= contenders;
+    }
+    // give it one more pass to reflect "any leftover buyers see stock<=0"
+    return { sold, left: stock };
+  }
+  function runSync() {
+    let stock = initial, sold = 0;
+    for (let i = 0; i < buyers; i++) if (stock >= 1) { stock--; sold++; }
+    return { sold, left: stock };
+  }
+  function runCas() { return runSync(); }              // outcome-identical
+  function runOptimistic() { return runSync(); }        // outcome-identical
+  function runQueue() { return runSync(); }             // outcome-identical
+
+  const results = [
+    ['Naive (read-then-write)',           runNaive()],
+    ['Synchronized (intrinsic lock)',     runSync()],
+    ['Atomic CAS loop',                   runCas()],
+    ['Optimistic locking (@Version)',     runOptimistic()],
+    ['Queue-serialised (per SKU)',        runQueue()],
+  ];
+
+  const header = ('Strategy'.padEnd(40) + 'Sold'.padStart(8) + 'Left'.padStart(8) + '  Verdict');
+  logTo('ov-log', header, 'dim');
+  logTo('ov-log', '-'.repeat(header.length), 'dim');
+  results.forEach(([name, r]) => {
+    const oversell = r.sold > initial || r.left < 0;
+    const verdict = oversell ? 'OVERSOLD' : (r.sold === initial && r.left === 0 ? 'OK' : 'UNDER');
+    const cls = oversell ? 'bad' : (verdict === 'OK' ? 'ok' : 'warn');
+    logTo('ov-log',
+      name.padEnd(40) + String(r.sold).padStart(8) + String(r.left).padStart(8) + '  ' + verdict,
+      cls);
+  });
+  logTo('ov-log', '');
+  logTo('ov-log', '(In-browser sim uses a simplified interleaving; the Java POC produces the same verdicts under real virtual-thread contention.)', 'dim');
+};
+
+// ================== POC 3 — flash sale ==================
+const bucketView = document.getElementById('fs-buckets-view');
+function renderBuckets(buckets) {
+  bucketView.innerHTML = '';
+  buckets.forEach((v, i) => {
+    const d = document.createElement('div');
+    d.className = 'bucket' + (v === 0 ? ' empty' : '');
+    d.innerHTML = `${v}<small>b${i}</small>`;
+    bucketView.appendChild(d);
+  });
+}
+document.getElementById('fs-clear').onclick = () => { clearLog('fs-log'); bucketView.innerHTML = ''; };
+document.getElementById('fs-run').onclick = () => {
+  clearLog('fs-log');
+  const req = +document.getElementById('fs-req').value;
+  const units = +document.getElementById('fs-units').value;
+  const B = +document.getElementById('fs-buckets').value;
+  const gateOn = document.getElementById('fs-gate').value === 'on';
+
+  // Split units into buckets
+  const buckets = new Array(B).fill(0);
+  const per = Math.floor(units / B);
+  let rem = units - per * B;
+  for (let i = 0; i < B; i++) buckets[i] = per + (i < rem ? 1 : 0);
+  renderBuckets(buckets);
+
+  // Admission gate: 3 req/s per user, cap 5000 in-flight simulated as "5% pass"
+  const dropRate = gateOn ? 0.85 : 0.0;
+  let dropped = 0, admitted = 0, sold = 0, walks = 0;
+  for (let i = 0; i < req; i++) {
+    if (Math.random() < dropRate) { dropped++; continue; }
+    admitted++;
+    let start = Math.floor(Math.random() * B);
+    let bought = false;
+    for (let k = 0; k < B; k++) {
+      const idx = (start + k) % B;
+      if (buckets[idx] > 0) { buckets[idx]--; sold++; bought = true; if (k > 0) walks += k; break; }
+    }
+    if (!bought) { /* sold-out */ }
+  }
+  renderBuckets(buckets);
+  const contentionScore = walks;
+  logTo('fs-log', `requests:      ${req.toLocaleString()}`);
+  logTo('fs-log', `admitted:      ${admitted.toLocaleString()}` + (gateOn ? ' (85% dropped at gate)' : ''));
+  logTo('fs-log', `dropped:       ${dropped.toLocaleString()}`, 'warn');
+  logTo('fs-log', `sold:          ${sold} (expected ${units})`, sold === units ? 'ok' : 'bad');
+  logTo('fs-log', `stock left:    ${buckets.reduce((a,b)=>a+b,0)}`);
+  logTo('fs-log', `bucket walks:  ${contentionScore.toLocaleString()}  (lower = better spread)`);
+  logTo('fs-log', '');
+  if (B === 1) logTo('fs-log', 'With 1 bucket every admitted request hits the same CAS cell. In Java that\'s CAS-retry storm.', 'warn');
+  else logTo('fs-log', `${B} buckets means contention per bucket drops by ~${B}×.`, 'ok');
+};
+
+// ================== POC 4 — coupon ==================
+const CART = {
+  items: [
+    { sku: 'IPHONE-15',  cat: 'phones',      price: 25_000_000, qty: 1 },
+    { sku: 'SAMSUNG-S24',cat: 'phones',      price: 22_000_000, qty: 1 },
+    { sku: 'CASE-OEM',   cat: 'accessories', price: 350_000,    qty: 2 }
+  ],
+  shipping: 30_000
+};
+const COUPONS = {
+  'PERCENT10': { stage: 10, code: 'PERCENT10', kind: 'PCT', pct: 10, cap: 500_000 },
+  'PERCENT5':  { stage: 10, code: 'PERCENT5',  kind: 'PCT', pct: 5,  cap: 200_000 },
+  'PHONES15':  { stage: 20, code: 'PHONES15',  kind: 'CATPCT', pct: 15, cat: 'phones', cap: 2_000_000 },
+  'MINUS50K':  { stage: 30, code: 'MINUS50K',  kind: 'FIXED', amt: 50_000, minSubtotal: 1_000_000 },
+  'FREESHIP':  { stage: 40, code: 'FREESHIP',  kind: 'SHIP',  cap: 200_000 }
+};
+const VND = new Intl.NumberFormat('vi-VN');
+function subtotal(c) { return c.items.reduce((s,i) => s + i.price * i.qty, 0); }
+function catSubtotal(c, cat) { return c.items.filter(i => i.cat === cat).reduce((s,i) => s + i.price * i.qty, 0); }
+function stackable(a, b) {
+  // Two PCT-on-subtotal coupons don't stack.
+  if (a.kind === 'PCT' && b.kind === 'PCT') return false;
+  // FREESHIP stacks with everything.
+  return true;
+}
+function applyCoupons(cart, codes) {
+  const cs = codes.map(c => COUPONS[c]).filter(Boolean);
+  for (let i = 0; i < cs.length; i++)
+    for (let j = i+1; j < cs.length; j++)
+      if (!stackable(cs[i], cs[j])) return { error: `not stackable: ${cs[i].code} + ${cs[j].code}` };
+  const ordered = [...cs].sort((a,b) => a.stage - b.stage);
+  let sub = subtotal(cart), ship = cart.shipping;
+  const audit = [];
+  for (const c of ordered) {
+    const before = sub + ship;
+    let d = 0;
+    if (c.kind === 'PCT') { d = Math.min(Math.floor(sub * c.pct / 100), c.cap); d = Math.min(d, sub); sub -= d; }
+    else if (c.kind === 'CATPCT') { d = Math.min(Math.floor(catSubtotal(cart, c.cat) * c.pct / 100), c.cap); d = Math.min(d, sub); sub -= d; }
+    else if (c.kind === 'FIXED') { if (sub >= c.minSubtotal) { d = Math.min(c.amt, sub); sub -= d; } }
+    else if (c.kind === 'SHIP') { d = Math.min(ship, c.cap); ship -= d; }
+    audit.push({ code: c.code, stage: c.stage, discount: d });
+  }
+  return { subtotal: sub, shipping: ship, total: sub + ship, audit };
+}
+function selectedCodes() {
+  return [...document.querySelectorAll('.c-cb')].filter(x => x.checked).map(x => x.dataset.c);
+}
+document.getElementById('cp-apply').onclick = () => {
+  clearLog('cp-log');
+  const codes = selectedCodes();
+  const gross = subtotal(CART) + CART.shipping;
+  logTo('cp-log', `Cart gross:   ${VND.format(gross)} VND  (subtotal ${VND.format(subtotal(CART))} + ship ${VND.format(CART.shipping)})`);
+  logTo('cp-log', `Applied:      [${codes.join(', ')}]`);
+  const r = applyCoupons(CART, codes);
+  if (r.error) { logTo('cp-log', 'REJECTED: ' + r.error, 'bad'); return; }
+  r.audit.forEach(a => a.discount > 0 && logTo('cp-log',
+    `  ${a.code.padEnd(12)} stage=${a.stage}   −${VND.format(a.discount).padStart(12)} VND`));
+  logTo('cp-log', '');
+  logTo('cp-log', `final total:  ${VND.format(r.total)} VND`, 'ok');
+  logTo('cp-log', `you saved:    ${VND.format(gross - r.total)} VND`, 'ok');
+};
+document.getElementById('cp-best').onclick = () => {
+  clearLog('cp-log');
+  const wallet = Object.keys(COUPONS);
+  const n = wallet.length;
+  const gross = subtotal(CART) + CART.shipping;
+  let best = { total: gross, codes: [] };
+  for (let m = 1; m < (1 << n); m++) {
+    const subset = [];
+    for (let i = 0; i < n; i++) if (m & (1 << i)) subset.push(wallet[i]);
+    const r = applyCoupons(CART, subset);
+    if (r.error) continue;
+    if (r.total < best.total) best = { total: r.total, codes: subset };
+  }
+  logTo('cp-log', `Wallet:        [${wallet.join(', ')}]`);
+  logTo('cp-log', `Search space:  ${(1<<n) - 1} subsets (brute-force)`);
+  logTo('cp-log', `Best combo:    [${best.codes.join(', ')}]`, 'ok');
+  logTo('cp-log', `Final total:   ${VND.format(best.total)} VND`, 'ok');
+  logTo('cp-log', `You saved:     ${VND.format(gross - best.total)} VND`, 'ok');
+};
+</script>
+
+</body>
+</html>

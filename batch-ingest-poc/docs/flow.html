@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>batch-ingest-poc — flow & key tech</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e2230;
+    --ink: #e8ecf1;
+    --ink-dim: #9aa4b2;
+    --line: #2b3040;
+    --accent: #6ea8fe;
+    --accent-2: #b18cff;
+    --ok: #58d68d;
+    --warn: #f5b041;
+    --err: #e77373;
+    --csv: #58d68d;
+    --parquet: #b18cff;
+    --db: #f5b041;
+    --shared: #6ea8fe;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    padding: 28px 32px 8px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #1a1e2a 0%, var(--bg) 100%);
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    letter-spacing: 0.2px;
+  }
+  header p { margin: 0; color: var(--ink-dim); font-size: 14px; }
+  main { padding: 24px 32px 64px; max-width: 1200px; margin: 0 auto; }
+  section { margin-bottom: 36px; }
+  h2 {
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--ink-dim);
+    margin: 0 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 { font-size: 15px; margin: 0 0 6px; color: var(--ink); }
+  p { margin: 0 0 10px; }
+  code, .code {
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #ffdca8;
+  }
+  .diagram {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    overflow-x: auto;
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    margin: 14px 0 0; padding: 0; list-style: none;
+    font-size: 12.5px; color: var(--ink-dim);
+  }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch {
+    width: 12px; height: 12px; border-radius: 3px; display: inline-block;
+  }
+  .grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card .tag {
+    display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px;
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 8px;
+    background: var(--panel-2); color: var(--ink-dim);
+  }
+  .card .tag.csv     { color: var(--csv);     border: 1px solid rgba(88,214,141,0.4); }
+  .card .tag.parquet { color: var(--parquet); border: 1px solid rgba(177,140,255,0.4); }
+  .card .tag.db      { color: var(--db);      border: 1px solid rgba(245,176,65,0.4); }
+  .card .tag.shared  { color: var(--shared);  border: 1px solid rgba(110,168,254,0.4); }
+  .card ul { padding-left: 18px; margin: 8px 0 0; }
+  .card li { margin-bottom: 4px; color: var(--ink); }
+  .card .muted { color: var(--ink-dim); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-dim); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .callout {
+    background: linear-gradient(180deg, rgba(110,168,254,0.08), rgba(110,168,254,0.02));
+    border: 1px solid rgba(110,168,254,0.25);
+    padding: 12px 16px; border-radius: 10px; margin-top: 16px;
+    color: var(--ink); font-size: 13.5px;
+  }
+  .callout b { color: var(--accent); }
+  footer {
+    color: var(--ink-dim); font-size: 12.5px; text-align: center;
+    padding: 24px 0 8px; border-top: 1px solid var(--line);
+  }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tabs button {
+    background: var(--panel);
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    font-size: 12.5px;
+    letter-spacing: 0.4px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.15s ease all;
+  }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.active {
+    background: var(--panel-2);
+    color: var(--ink);
+    border-color: var(--accent);
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>batch-ingest-poc — flow &amp; key tech</h1>
+  <p>Standalone visual companion to <a href="../ISSUE.md">ISSUE.md</a>, <a href="../TECHNICAL.md">TECHNICAL.md</a>, and <a href="../CONSISTENCY.md">CONSISTENCY.md</a>.</p>
+</header>
+
+<main>
+
+<section>
+  <h2>End-to-end flow</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1120 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="batch ingest flow">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#6ea8fe"/>
+        </marker>
+        <marker id="arrowMuted" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#5a6478"/>
+        </marker>
+        <style>
+          .box   { fill:#1e2230; stroke:#2b3040; stroke-width:1; rx:8; ry:8; }
+          .boxL  { fill:#242938; stroke:#3a4256; }
+          .csv   { fill:#1a2a20; stroke:#58d68d; }
+          .parq  { fill:#231e30; stroke:#b18cff; }
+          .db    { fill:#2b2418; stroke:#f5b041; }
+          .writer{ fill:#1e2632; stroke:#6ea8fe; }
+          .title { font: 600 13px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#e8ecf1; }
+          .sub   { font: 500 11.5px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#9aa4b2; }
+          .tiny  { font: 500 10.5px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#9aa4b2; }
+          .flow  { stroke:#6ea8fe; stroke-width:1.6; fill:none; }
+          .muted { stroke:#5a6478; stroke-width:1.2; fill:none; stroke-dasharray:4 3; }
+          .headL { font: 600 12px -apple-system, "Segoe UI", Roboto, sans-serif; fill:#9aa4b2; letter-spacing:1.5px; }
+        </style>
+      </defs>
+
+      <text x="40" y="30" class="headL">1 · TRIGGER</text>
+      <rect x="30" y="46" width="220" height="70" class="box"/>
+      <text x="46" y="72" class="title">POST /jobs/{jobName}</text>
+      <text x="46" y="90" class="sub">JobLaunchController</text>
+      <text x="46" y="106" class="sub">returns 202 + executionId</text>
+
+      <text x="290" y="30" class="headL">2 · LAUNCH</text>
+      <rect x="280" y="46" width="230" height="70" class="box"/>
+      <text x="296" y="72" class="title">asyncJobLauncher</text>
+      <text x="296" y="90" class="sub">TaskExecutorJobLauncher</text>
+      <text x="296" y="106" class="sub">bounded pool · @Primary</text>
+
+      <text x="550" y="30" class="headL">3 · JOB REPOSITORY</text>
+      <rect x="540" y="46" width="230" height="70" class="boxL"/>
+      <text x="556" y="72" class="title">JobRepository (Postgres)</text>
+      <text x="556" y="90" class="sub">BATCH_JOB_INSTANCE · BATCH_JOB_EXECUTION</text>
+      <text x="556" y="106" class="sub">BATCH_STEP_EXECUTION_CONTEXT ← restart state</text>
+
+      <text x="810" y="30" class="headL">4 · OPERATOR</text>
+      <rect x="800" y="46" width="290" height="70" class="box"/>
+      <text x="816" y="72" class="title">SimpleJobOperator</text>
+      <text x="816" y="90" class="sub">/jobs/{id}/stop · cooperative</text>
+      <text x="816" y="106" class="sub">/jobs/{id}/restart · same instance, new execution</text>
+
+      <path d="M250,81 L280,81" class="flow" marker-end="url(#arrow)"/>
+      <path d="M510,81 L540,81" class="flow" marker-end="url(#arrow)"/>
+      <path d="M770,81 L800,81" class="muted" marker-end="url(#arrowMuted)"/>
+
+      <text x="40" y="150" class="headL">5 · MANAGER STEP  (per job)</text>
+      <rect x="30" y="166" width="1060" height="90" class="box"/>
+      <text x="46" y="192" class="title">{csv|parquet|db}ManagerStep — partition input, dispatch workers</text>
+      <text x="46" y="212" class="sub">Partitioner produces N ExecutionContexts (one per worker); TaskExecutorPartitionHandler dispatches to partitionTaskExecutor.</text>
+      <text x="46" y="232" class="sub">grid-size = target parallelism · partition ownership persisted → restart resumes only unfinished workers.</text>
+
+      <text x="40" y="286" class="headL">6 · PARTITIONERS  (source-specific)</text>
+      <rect x="30" y="302" width="335" height="80" class="csv"/>
+      <text x="46" y="326" class="title">CSV · FilePartitioner</text>
+      <text x="46" y="345" class="sub">round-robin files → N partitions</text>
+      <text x="46" y="362" class="sub">effectiveGrid = min(gridSize, fileCount)</text>
+
+      <rect x="392" y="302" width="335" height="80" class="parq"/>
+      <text x="408" y="326" class="title">Parquet · FilePartitioner</text>
+      <text x="408" y="345" class="sub">same file-round-robin logic</text>
+      <text x="408" y="362" class="sub">restart state: fileIndex + rowIndex</text>
+
+      <rect x="754" y="302" width="336" height="80" class="db"/>
+      <text x="770" y="326" class="title">DB · IdRangePartitioner</text>
+      <text x="770" y="345" class="sub">MIN(id)/MAX(id) → equal buckets</text>
+      <text x="770" y="362" class="sub">disjoint ranges = exclusive worker ownership</text>
+
+      <path d="M197,382 L197,412" class="flow" marker-end="url(#arrow)"/>
+      <path d="M559,382 L559,412" class="flow" marker-end="url(#arrow)"/>
+      <path d="M921,382 L921,412" class="flow" marker-end="url(#arrow)"/>
+
+      <text x="40" y="422" class="headL">7 · WORKER STEP  (chunk-oriented, ×N in parallel)</text>
+      <rect x="30" y="438" width="1060" height="130" class="box"/>
+
+      <rect x="55" y="460" width="220" height="90" class="boxL"/>
+      <text x="70" y="483" class="title">Reader</text>
+      <text x="70" y="502" class="sub">MultiResource+FlatFile (CSV)</text>
+      <text x="70" y="519" class="sub">AvroParquetReader (Parquet)</text>
+      <text x="70" y="536" class="sub">JdbcPagingItemReader (DB)</text>
+
+      <rect x="295" y="460" width="220" height="90" class="boxL"/>
+      <text x="310" y="483" class="title">Processor</text>
+      <text x="310" y="502" class="sub">ValidatingTransactionProcessor</text>
+      <text x="310" y="519" class="sub">Jakarta Bean Validation</text>
+      <text x="310" y="536" class="sub">throws ConstraintViolation → skip</text>
+
+      <rect x="535" y="460" width="220" height="90" class="writer"/>
+      <text x="550" y="483" class="title">Writer</text>
+      <text x="550" y="502" class="sub">JdbcBatchItemWriter</text>
+      <text x="550" y="519" class="sub">INSERT … ON CONFLICT DO NOTHING</text>
+      <text x="550" y="536" class="sub">chunk = 1 JDBC batch = 1 tx</text>
+
+      <rect x="775" y="460" width="290" height="90" class="boxL"/>
+      <text x="790" y="483" class="title">Listeners (shared)</text>
+      <text x="790" y="502" class="sub">RejectedItemListener → ingest_errors</text>
+      <text x="790" y="519" class="sub">JobMetricsListener → Micrometer</text>
+      <text x="790" y="536" class="sub">SkipPolicy: skipLimit=50</text>
+
+      <path d="M275,505 L295,505" class="flow" marker-end="url(#arrow)"/>
+      <path d="M515,505 L535,505" class="flow" marker-end="url(#arrow)"/>
+
+      <text x="40" y="596" class="headL">8 · SINKS</text>
+      <rect x="30" y="580" width="220" height="30" class="writer"/>
+      <text x="46" y="600" class="title">transactions (target)</text>
+
+      <rect x="270" y="580" width="220" height="30" class="boxL"/>
+      <text x="286" y="600" class="title">ingest_errors (audit)</text>
+
+      <rect x="510" y="580" width="220" height="30" class="boxL"/>
+      <text x="526" y="600" class="title">/actuator/prometheus</text>
+
+      <rect x="750" y="580" width="340" height="30" class="boxL"/>
+      <text x="766" y="600" class="title">GET /jobs/executions/{id} — live status</text>
+
+      <path d="M645,550 L645,580" class="muted" marker-end="url(#arrowMuted)"/>
+      <path d="M885,550 L885,580" class="muted" marker-end="url(#arrowMuted)"/>
+      <path d="M405,550 L405,580" class="muted" marker-end="url(#arrowMuted)"/>
+      <path d="M165,550 L165,580" class="muted" marker-end="url(#arrowMuted)"/>
+    </svg>
+    <ul class="legend">
+      <li><span class="swatch" style="background:#58d68d"></span> CSV job</li>
+      <li><span class="swatch" style="background:#b18cff"></span> Parquet job</li>
+      <li><span class="swatch" style="background:#f5b041"></span> DB job</li>
+      <li><span class="swatch" style="background:#6ea8fe"></span> Shared platform</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2>The three source shapes, side by side</h2>
+  <div class="tabs" id="sourceTabs">
+    <button data-target="tab-csv" class="active">CSV</button>
+    <button data-target="tab-parquet">Parquet</button>
+    <button data-target="tab-db">DB → DB</button>
+  </div>
+
+  <div id="tab-csv" class="panel active">
+    <div class="grid">
+      <div class="card">
+        <span class="tag csv">Hard problem</span>
+        <p>Millions of rows across many files; a single file may exceed heap. Restart must resume mid-file.</p>
+      </div>
+      <div class="card">
+        <span class="tag csv">What we protect</span>
+        <ul><li>No duplicates in <code>transactions</code></li><li>Every rejected row lands in <code>ingest_errors</code></li><li>Row count is deterministic across restarts</li></ul>
+      </div>
+      <div class="card">
+        <span class="tag csv">Solution shape</span>
+        <p><code>FilePartitioner</code> round-robins files across <code>grid-size</code> workers. Each worker wraps <code>MultiResourceItemReader</code> around a streaming <code>FlatFileItemReader</code>.</p>
+      </div>
+      <div class="card">
+        <span class="tag csv">Key tech</span>
+        <ul>
+          <li>Reader: <code>MultiResourceItemReader</code> + <code>FlatFileItemReader</code></li>
+          <li>Partition: <code>FilePartitioner</code></li>
+          <li>Restart: file index + line offset in <code>ExecutionContext</code></li>
+          <li>Skip: <code>NumberFormatException</code>, <code>DateTimeParseException</code>, <code>ConstraintViolationException</code></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag csv">Tech debt</span>
+        <ul><li>Round-robin skews on mixed-size files</li><li>Header check is trust-only (<code>linesToSkip=1</code>)</li><li>No encoding fallback (UTF-8 only)</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-parquet" class="panel">
+    <div class="grid">
+      <div class="card">
+        <span class="tag parquet">Hard problem</span>
+        <p>Columnar format; no cheap "seek to row N." Restart granularity is coarser than CSV; a resume physically re-reads and discards rows.</p>
+      </div>
+      <div class="card">
+        <span class="tag parquet">What we protect</span>
+        <ul><li>Deterministic row count across restarts</li><li>No file-handle leaks across partitions</li></ul>
+      </div>
+      <div class="card">
+        <span class="tag parquet">Solution shape</span>
+        <p>Custom <code>ParquetTransactionItemReader implements ItemStreamReader</code>. Persists <code>parquet.fileIndex</code> and <code>parquet.rowIndex</code>; on <code>open()</code>, fast-forwards by discarding rows.</p>
+      </div>
+      <div class="card">
+        <span class="tag parquet">Key tech</span>
+        <ul>
+          <li>Reader: <code>AvroParquetReader</code> + custom stream reader</li>
+          <li>Partition: same <code>FilePartitioner</code> as CSV</li>
+          <li>Restart state: file-index + row-in-file</li>
+          <li>Skip: adds <code>IllegalArgumentException</code> (Avro type mismatch)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag parquet">Tech debt</span>
+        <ul><li>Fast-forward is O(rows-already-read) — not row-group aware</li><li>Schema is not validated up-front</li><li>Only two timestamp encodings handled</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-db" class="panel">
+    <div class="grid">
+      <div class="card">
+        <span class="tag db">Hard problem</span>
+        <p>Live source table; can't hold one long transaction; two workers must never claim the same row.</p>
+      </div>
+      <div class="card">
+        <span class="tag db">What we protect</span>
+        <ul><li>Every source row read by exactly one worker</li><li>Cursor is per-page, not per-partition</li><li>Idempotent target write</li></ul>
+      </div>
+      <div class="card">
+        <span class="tag db">Solution shape</span>
+        <p><code>IdRangePartitioner</code> reads <code>MIN(id)/MAX(id)</code> and splits into equal buckets. Each worker's <code>JdbcPagingItemReader</code> filters <code>WHERE id BETWEEN :minId AND :maxId ORDER BY id</code>.</p>
+      </div>
+      <div class="card">
+        <span class="tag db">Key tech</span>
+        <ul>
+          <li>Reader: <code>JdbcPagingItemReader</code> + <code>PostgresPagingQueryProvider</code></li>
+          <li>Partition: <code>IdRangePartitioner</code> (disjoint by construction)</li>
+          <li>Restart: page cursor persisted per partition</li>
+          <li>Cursor: opens new statement per page</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="tag db">Tech debt</span>
+        <ul><li>Skewed / sparse id space unbalances partitions</li><li>No source-side snapshot — new rows during run may be missed</li><li>Postgres-specific query provider</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Shared platform (why adding a fourth source is cheap)</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="tag shared">Writer</span>
+      <p><code>JdbcBatchItemWriter</code> with <code>INSERT … ON CONFLICT (transaction_id) DO NOTHING</code>. Same instance used by all three jobs.</p>
+      <p class="muted"><code>assertUpdates=false</code> allows the legitimate zero-row updates on duplicates.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Processor</span>
+      <p>Jakarta Bean Validation runs on every <code>TransactionRecord</code>. Violation → skip + audit row.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Listeners</span>
+      <p><code>RejectedItemListener</code> → <code>ingest_errors</code> (job name, step, partition, payload, error class, message).</p>
+      <p><code>JobMetricsListener</code> → Micrometer: <code>batch_job_duration</code>, records <code>read/written/skipped</code>.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Infrastructure</span>
+      <p><code>BatchInfrastructureConfig</code> publishes the async <code>JobLauncher</code>, <code>JobOperator</code>, a bounded <code>partitionTaskExecutor</code>, and the <code>JobRegistry</code>.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">REST surface</span>
+      <p><code>POST /jobs/{name}</code>, <code>POST /jobs/{id}/stop</code>, <code>POST /jobs/{id}/restart</code>, <code>GET /jobs/executions/{id}</code>.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">JobRepository</span>
+      <p>Postgres via Spring Batch metadata schema (Flyway <code>V2</code>). All coordination — restart, stop, status — routes through here.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Sub-problem → answer</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th style="width:26%">Sub-problem</th><th>How the POC answers it</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Volume vs memory</td><td>Streaming readers + <code>chunk-size</code> caps the in-flight buffer. No <code>List</code>-of-everything.</td></tr>
+        <tr><td>Wall-clock latency</td><td>Partitioned fan-out on <code>partitionTaskExecutor</code>; disjoint partitions never contend for the same source rows.</td></tr>
+        <tr><td>Restart after crash</td><td>Reader state (file index / row index / page cursor) persisted in <code>BATCH_STEP_EXECUTION_CONTEXT</code>; each partition resumes independently.</td></tr>
+        <tr><td>Duplicates</td><td><code>UNIQUE (transaction_id)</code> + <code>ON CONFLICT DO NOTHING</code>. Safe against replayed sources and replayed chunks.</td></tr>
+        <tr><td>Bad rows</td><td>Fault-tolerant step with typed <code>skip()</code> list and <code>skipLimit</code>; every skip audited to <code>ingest_errors</code>.</td></tr>
+        <tr><td>Three source shapes, one pipeline</td><td>Only the partitioner and reader change per source. Processor, writer, listeners, skip policy, metrics — all shared beans.</td></tr>
+        <tr><td>Observability</td><td>Micrometer timers/counters per job, scraped by Prometheus. Live per-step status via <code>GET /jobs/executions/{id}</code>.</td></tr>
+        <tr><td>Operator control</td><td><code>SimpleJobOperator</code> exposes cooperative stop + restart; both work across pod restarts because state is in Postgres.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Scaling to a fleet — the three shapes</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="tag shared">Shape 1 · Leader-elected</span>
+      <p>N pods, one leader runs jobs (K8s lease or Postgres advisory lock). Followers serve status &amp; health.</p>
+      <p class="muted">Zero code change. Failover = leader change. Bounded by one pod's CPU.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Shape 2 · Active/active, shared JobRepository</span>
+      <p>Any pod can launch. Add an app-level "one running per job name" guard using <code>JobExplorer</code> + advisory lock.</p>
+      <p class="muted">Concurrency scales across <em>different</em> jobs; a single job still runs on one pod.</p>
+    </div>
+    <div class="card">
+      <span class="tag shared">Shape 3 · Remote partitioning</span>
+      <p>Swap <code>TaskExecutorPartitionHandler</code> → <code>MessageChannelPartitionHandler</code> over Kafka/Rabbit. Workers run on any pod.</p>
+      <p class="muted">Highest throughput. Broker + shared JobRepository become critical infrastructure.</p>
+    </div>
+  </div>
+  <div class="callout">
+    <b>The invariant that ties them all together:</b> the shared Spring Batch metadata schema in Postgres is the single source of truth for what work exists, who owns each partition, and where every worker resumes. Idempotent writes make the ugliest races non-fatal. Detail in <a href="../CONSISTENCY.md">CONSISTENCY.md</a>.
+  </div>
+</section>
+
+<section>
+  <h2>Tech debt at a glance</h2>
+  <div class="card">
+    <ul>
+      <li><b>Single-JVM partitioning only</b> — remote partitioning is documented, not wired.</li>
+      <li><b>No auth on <code>/jobs/*</code></b> — gate with Spring Security before exposing.</li>
+      <li><b><code>ON CONFLICT</code> is Postgres-only</b> — port to <code>MERGE</code> for Oracle/SQL Server.</li>
+      <li><b><code>ingest_errors</code> grows unboundedly</b> — no TTL, no rollup, no re-drive.</li>
+      <li><b>Parquet restart is O(rows-already-read)</b> — not row-group aware.</li>
+      <li><b>DB partitioner assumes dense ids</b> — sparse/skewed key space unbalances workers.</li>
+      <li><b>Cross-row validation not possible</b> — Bean Validation is per-item; stateful checks need a different stage.</li>
+      <li><b>Skip listener writes 1 row per skip in its own tx</b> — high skip volume dominates writer time.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Standalone doc — open <code>docs/flow.html</code> in any browser. Nothing to install.
+</footer>
+
+<script>
+  document.querySelectorAll('#sourceTabs button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = btn.getAttribute('data-target');
+      document.querySelectorAll('#sourceTabs button').forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      var el = document.getElementById(target);
+      if (el) el.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

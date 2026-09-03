@@ -1,0 +1,25 @@
+server:
+  port: 8101
+
+spring:
+  application:
+    name: poc-01-million-connections
+
+# Each POC binds MqttClientProperties from this section.
+mqtt:
+  broker-url: tcp://localhost:1880     # via HAProxy so load is spread across emqx1/2/3
+  client-id-prefix: fleet-client
+  username: backend-svc                # superuser - skips ACL cost during scale test
+  password: backend-secret
+  clean-session: true                  # ephemeral sessions only - don't fill broker session table
+  session-expiry-interval: 0
+  keep-alive-seconds: 60               # bigger keepalive = less broker PING traffic at 100k conns
+  connection-timeout-seconds: 30
+  max-inflight: 10
+  automatic-reconnect: true            # POC 01 doesn't test reconnect storm - leave to library
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,info,metrics
+  metrics.tags.application: ${spring.application.name}

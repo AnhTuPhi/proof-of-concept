@@ -1,0 +1,33 @@
+{
+  "namespace": "com.claude.kafka.avro.model",
+  "type": "record",
+  "name": "OrderEvent",
+  "doc": "Order event schema v1. ANY change here is tested against the registry's BACKWARD compat mode before publishing.",
+  "fields": [
+    { "name": "orderId",    "type": "string" },
+    { "name": "customerId", "type": "string" },
+    { "name": "status",     "type": {
+        "type": "enum",
+        "name": "OrderStatus",
+        "symbols": ["PLACED","PAID","SHIPPED","CANCELLED"]
+    }},
+    { "name": "totalAmount","type": { "type": "bytes", "logicalType": "decimal", "precision": 18, "scale": 2 }},
+    { "name": "currency",   "type": "string", "default": "USD" },
+    { "name": "occurredAt", "type": { "type": "long", "logicalType": "timestamp-millis" }},
+
+    {
+      "name": "shippingAddress",
+      "doc": "Added in v2 as a nullable union with default null. BACKWARD compatible: v1 consumers read records produced under v2 and skip the new field; v2 consumers read v1 records and see null.",
+      "type": ["null", {
+        "type": "record",
+        "name": "Address",
+        "fields": [
+          { "name": "line1",    "type": "string" },
+          { "name": "city",     "type": "string" },
+          { "name": "country",  "type": "string", "default": "US" }
+        ]
+      }],
+      "default": null
+    }
+  ]
+}

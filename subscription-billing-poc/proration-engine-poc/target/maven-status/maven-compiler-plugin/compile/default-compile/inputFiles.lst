@@ -1,0 +1,12 @@
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\BillingController.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\ChangeStrategy.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\CustomerCredit.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\DataSeeder.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\Invoice.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\InvoiceLineItem.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\Plan.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\ProrationApplication.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\ProrationCalculator.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\Repositories.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\Subscription.java
+D:\Claude\subscription-billing-pocs\proration-engine-poc\src\main\java\com\example\billing\proration\SubscriptionService.java

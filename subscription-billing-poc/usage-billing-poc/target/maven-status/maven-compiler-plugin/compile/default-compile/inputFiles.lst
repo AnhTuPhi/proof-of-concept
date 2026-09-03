@@ -1,0 +1,15 @@
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\BillingService.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\DailyRollup.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\DataSeeder.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\IngestionService.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\Invoice.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\InvoiceLineItem.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\PricingTier.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\ReconciliationService.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\Repositories.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\RollupService.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\TieredPricingCalculator.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\UsageApplication.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\UsageController.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\UsageEvent.java
+D:\Claude\subscription-billing-pocs\usage-billing-poc\src\main\java\com\example\billing\usage\UsageMetric.java

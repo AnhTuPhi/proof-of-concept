@@ -1,0 +1,16 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# generated test data
+data/csv/*.csv
+data/parquet/*.parquet
+!data/csv/.gitkeep
+!data/parquet/.gitkeep
+
+# logs
+logs/
+*.log

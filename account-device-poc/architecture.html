@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auth & Access POC Suite — Visual Explainer</title>
+<style>
+  :root{
+    --bg:#0f1318;--panel:#151b22;--panel2:#0a0d11;--line:#222b34;--text:#e6edf3;
+    --muted:#8b949e;--accent:#58a6ff;--warn:#d29922;--bad:#f85149;--good:#3fb950;--purple:#d2a8ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+  header{padding:28px 24px;border-bottom:1px solid var(--line)}
+  h1{margin:0 0 6px;font-size:24px}
+  .sub{color:var(--muted);font-size:14px;max-width:820px}
+  main{max-width:1040px;margin:0 auto;padding:24px}
+  nav.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+  nav.tabs button{background:var(--panel);color:var(--muted);border:1px solid var(--line);border-radius:8px;
+    padding:10px 16px;font-size:14px;cursor:pointer;transition:.15s}
+  nav.tabs button:hover{color:var(--text);border-color:#30404d}
+  nav.tabs button.active{background:#1f6feb;color:#fff;border-color:#1f6feb}
+  section.poc{display:none}
+  section.poc.active{display:block}
+  .lead{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:8px;padding:16px 18px;margin-bottom:20px}
+  .lead h2{margin:0 0 6px;font-size:19px}
+  .lead .protect{font-size:13px;color:var(--good);margin-top:8px}
+  .lead .protect b{color:var(--good)}
+  h3{font-size:15px;margin:26px 0 12px;color:var(--text);border-bottom:1px solid var(--line);padding-bottom:6px}
+  .diagram{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+  .diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}
+  .cols{display:grid;grid-template-columns:1fr;gap:14px}
+  @media(min-width:760px){.cols.two{grid-template-columns:1fr 1fr}.cols.three{grid-template-columns:1fr 1fr 1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .card h4{margin:0 0 8px;font-size:14px}
+  .card p,.card li{font-size:13px;color:var(--muted);margin:4px 0}
+  .card ul{margin:6px 0;padding-left:18px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+  td b{color:var(--text)}
+  code{background:#1e252d;padding:1px 6px;border-radius:4px;color:var(--purple);font-size:12px}
+  .pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:99px;margin-left:8px}
+  .pill.port{background:#1e252d;color:var(--muted)}
+  .debt{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:8px;padding:14px 16px;margin-top:18px}
+  .debt h4{margin:0 0 8px;font-size:14px;color:var(--warn)}
+  .debt li{font-size:13px;color:var(--muted);margin:5px 0}
+  .scale{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--bad);border-radius:8px;padding:14px 16px;margin-top:14px}
+  .scale h4{margin:0 0 8px;font-size:14px;color:var(--bad)}
+  .scale p,.scale li{font-size:13px;color:var(--muted)}
+  .legend{font-size:12px;color:var(--muted);margin-top:10px;display:flex;flex-wrap:wrap;gap:16px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:24px;border-top:1px solid var(--line);margin-top:32px}
+  a{color:var(--accent)}
+  /* SVG text defaults */
+  text{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,sans-serif}
+</style>
+</head>
+<body>
+<header>
+  <h1>Auth &amp; Access POC Suite — Visual Explainer</h1>
+  <div class="sub">Three hard auth patterns, one diagram each. For the narrative see
+    <a href="ISSUE.md">ISSUE.md</a>, <a href="TECHNICAL.md">TECHNICAL.md</a>, and
+    <a href="CONSISTENCY.md">CONSISTENCY.md</a>. Live demos are launched from
+    <a href="index.html">index.html</a>. Java 21 / Spring Boot 3.4.3.</div>
+</header>
+<main>
+  <nav class="tabs">
+    <button class="active" data-tab="merge">28 · Account Merge</button>
+    <button data-tab="session">29 · Multi-Device Sessions</button>
+    <button data-tab="ratelimit">30 · Tiered Rate Limiting</button>
+    <button data-tab="scale">🌐 Scaling &amp; Consistency</button>
+  </nav>
+
+  <!-- ============================ 28 ACCOUNT MERGE ============================ -->
+  <section class="poc active" id="merge">
+    <div class="lead">
+      <h2>Account Merge <span class="pill port">port 8081</span></h2>
+      <div>User signed up via <b>Google</b> two years ago, forgot, and just signed up again
+        with <b>email + password</b>. Two <code>users</code> rows, one human. Merge their
+        data across N tables <b>without hard-deleting</b> either — both auth methods must
+        keep working.</div>
+      <div class="protect">🛡️ <b>Protecting:</b> financial trade records, the audit trail, and the
+        invariant that <i>every</i> auth method a person owns resolves to one live account.</div>
+    </div>
+
+    <h3>The flow — soft merge with a redirect tombstone</h3>
+    <div class="diagram">
+      <svg viewBox="0 0 960 470" role="img" aria-label="Account merge flow diagram">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/>
+          </marker>
+          <marker id="arrR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#3fb950"/>
+          </marker>
+        </defs>
+
+        <!-- Source user card -->
+        <rect x="20" y="40" width="220" height="170" rx="10" fill="#151b22" stroke="#f85149" stroke-width="1.5"/>
+        <text x="130" y="65" fill="#f85149" font-size="14" font-weight="700" text-anchor="middle">SOURCE (duplicate)</text>
+        <text x="36" y="90" fill="#e6edf3" font-size="12">User: "Anh Phi"</text>
+        <text x="36" y="110" fill="#8b949e" font-size="11">auth: GOOGLE g-104782311</text>
+        <text x="36" y="130" fill="#8b949e" font-size="11">2 trade_orders (VND, FPT)</text>
+        <text x="36" y="150" fill="#8b949e" font-size="11">1 watchlist "Old Favorites"</text>
+        <text x="36" y="170" fill="#8b949e" font-size="11">status: ACTIVE</text>
+        <text x="36" y="192" fill="#8b949e" font-size="11">phone: +84-901…</text>
+
+        <!-- Target user card -->
+        <rect x="720" y="40" width="220" height="170" rx="10" fill="#151b22" stroke="#3fb950" stroke-width="1.5"/>
+        <text x="830" y="65" fill="#3fb950" font-size="14" font-weight="700" text-anchor="middle">TARGET (survivor)</text>
+        <text x="736" y="90" fill="#e6edf3" font-size="12">User: "Phi Anh Tu"</text>
+        <text x="736" y="110" fill="#8b949e" font-size="11">auth: EMAIL_PASSWORD</text>
+        <text x="736" y="130" fill="#8b949e" font-size="11">1 trade_order (VIC)</text>
+        <text x="736" y="150" fill="#8b949e" font-size="11">1 watchlist "Today"</text>
+        <text x="736" y="170" fill="#8b949e" font-size="11">status: ACTIVE</text>
+        <text x="736" y="192" fill="#8b949e" font-size="11">phone: +84-902…</text>
+
+        <!-- Transaction box -->
+        <rect x="300" y="30" width="360" height="240" rx="10" fill="#0a0d11" stroke="#58a6ff" stroke-dasharray="5 4"/>
+        <text x="480" y="52" fill="#58a6ff" font-size="13" font-weight="700" text-anchor="middle">@Transactional merge()</text>
+
+        <rect x="320" y="66" width="320" height="34" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="330" y="87" fill="#e6edf3" font-size="12">1 · previewMerge → conflicts + row counts</text>
+
+        <rect x="320" y="106" width="320" height="34" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="330" y="127" fill="#e6edf3" font-size="12">2 · apply winning fields to TARGET</text>
+
+        <rect x="320" y="146" width="320" height="46" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="330" y="165" fill="#e6edf3" font-size="12">3 · UPDATE user_id: source→target</text>
+        <text x="330" y="182" fill="#8b949e" font-size="11">auth_methods · trade_orders · watchlists</text>
+
+        <rect x="320" y="198" width="320" height="34" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="330" y="219" fill="#e6edf3" font-size="12">4 · source → MERGED_REDIRECT → target</text>
+
+        <rect x="320" y="238" width="320" height="24" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="330" y="255" fill="#8b949e" font-size="11">5 · write 2 AuditEvent rows</text>
+
+        <!-- arrows into transaction -->
+        <line x1="240" y1="125" x2="298" y2="125" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="662" y1="125" x2="718" y2="125" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- Login resolution row -->
+        <rect x="20" y="300" width="920" height="150" rx="10" fill="#0a0d11" stroke="#3fb950" stroke-dasharray="5 4"/>
+        <text x="40" y="324" fill="#3fb950" font-size="13" font-weight="700">Later: user logs in with the OLD Google method →</text>
+
+        <rect x="40" y="340" width="240" height="44" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="52" y="360" fill="#e6edf3" font-size="12">login(GOOGLE, g-104782311)</text>
+        <text x="52" y="377" fill="#8b949e" font-size="11">auth_method → user_id (now target)</text>
+
+        <rect x="360" y="340" width="240" height="44" rx="6" fill="#151b22" stroke="#222b34"/>
+        <text x="372" y="360" fill="#e6edf3" font-size="12">followRedirect() walks chain</text>
+        <text x="372" y="377" fill="#8b949e" font-size="11">MERGED_REDIRECT → mergedIntoUserId</text>
+
+        <rect x="680" y="340" width="240" height="44" rx="6" fill="#151b22" stroke="#3fb950"/>
+        <text x="692" y="360" fill="#3fb950" font-size="12" font-weight="700">resolves to SURVIVOR ✓</text>
+        <text x="692" y="377" fill="#8b949e" font-size="11">both logins now land here</text>
+
+        <line x1="280" y1="362" x2="358" y2="362" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrR)"/>
+        <line x1="600" y1="362" x2="678" y2="362" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrR)"/>
+
+        <text x="40" y="420" fill="#8b949e" font-size="11">Cycle guard: max 8 hops (A→B→C…) then throws — never infinite-loops.</text>
+        <text x="40" y="438" fill="#8b949e" font-size="11">Source row is never deleted → audit + regulatory records preserved.</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#f85149"></span>losing account (kept as tombstone)</span>
+        <span><span class="dot" style="background:#3fb950"></span>surviving account</span>
+        <span><span class="dot" style="background:#58a6ff"></span>single DB transaction</span>
+      </div>
+    </div>
+
+    <h3>Key tech by responsibility</h3>
+    <table>
+      <tr><th>Responsibility</th><th>Mechanism</th></tr>
+      <tr><td><b>Atomic multi-table move</b></td><td><code>@Transactional</code> wraps all reassignments + status change</td></tr>
+      <tr><td><b>Bulk reassignment</b></td><td>JPQL <code>@Modifying UPDATE … set userId=:target where userId=:source</code> per repo</td></tr>
+      <tr><td><b>Never delete</b></td><td><code>UserStatus.MERGED_REDIRECT</code> tombstone + <code>mergedIntoUserId</code> pointer</td></tr>
+      <tr><td><b>Both logins keep working</b></td><td><code>resolveLogin → followRedirect</code> walks the chain (cycle-guarded)</td></tr>
+      <tr><td><b>Conflict decision</b></td><td><code>MergeRequest.winning*</code> fields applied to target &amp; counted</td></tr>
+      <tr><td><b>Forensics</b></td><td>two <code>AuditEvent</code> rows (survivor + loser); <code>UNIQUE(provider, externalId)</code></td></tr>
+    </table>
+
+    <div class="debt">
+      <h4>⚠️ Tech debt to acknowledge</h4>
+      <ul>
+        <li>In-memory <b>H2</b> stands in for Oracle (<code>create-drop</code>).</li>
+        <li>No pessimistic lock on the two users → concurrent merges can interleave.</li>
+        <li>Redirect chains can grow; needs a background <b>flatten</b> job (A→B→C ⇒ A→C).</li>
+        <li>Bulk JPQL bypasses the persistence context — a footgun if the flow grows.</li>
+        <li>Only 3 scalar fields resolve conflicts; real merges dedupe collections too.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================ 29 SESSIONS ============================ -->
+  <section class="poc" id="session">
+    <div class="lead">
+      <h2>Multi-Device Sessions <span class="pill port">port 8082</span></h2>
+      <div>Phone, laptop, tablet all logged in. User changes password → every in-flight
+        <b>JWT</b> must die <b>instantly</b>. Refresh tokens rotate on every use, and reuse
+        of a rotated token is treated as theft.</div>
+      <div class="protect">🛡️ <b>Protecting:</b> the ability to revoke trust <i>immediately</i> on a
+        stolen device, and to detect refresh-token theft instead of silently allowing it.</div>
+    </div>
+
+    <h3>The core tension &amp; the trick</h3>
+    <div class="diagram">
+      <svg viewBox="0 0 960 250" role="img" aria-label="Stateless vs revocable tension">
+        <rect x="20" y="30" width="420" height="190" rx="10" fill="#151b22" stroke="#d29922"/>
+        <text x="230" y="56" fill="#d29922" font-size="14" font-weight="700" text-anchor="middle">The tension</text>
+        <text x="40" y="86" fill="#e6edf3" font-size="12">JWT is <tspan font-weight="700">stateless</tspan> → fast, no DB per request…</text>
+        <text x="40" y="110" fill="#f85149" font-size="12">…but a signed token stays valid until it expires,</text>
+        <text x="40" y="128" fill="#f85149" font-size="12">even when you want it dead NOW.</text>
+        <text x="40" y="160" fill="#8b949e" font-size="11.5">Short TTL alone isn't enough: a 60s window is still</text>
+        <text x="40" y="178" fill="#8b949e" font-size="11.5">60s of a compromised token working.</text>
+
+        <rect x="520" y="30" width="420" height="190" rx="10" fill="#151b22" stroke="#3fb950"/>
+        <text x="730" y="56" fill="#3fb950" font-size="14" font-weight="700" text-anchor="middle">The hybrid trick</text>
+        <text x="540" y="86" fill="#e6edf3" font-size="12">Validate = signature + expiry (stateless)</text>
+        <text x="540" y="108" fill="#e6edf3" font-size="12">&nbsp;&nbsp;<tspan fill="#3fb950">+</tspan> session not revoked (O(1) lookup)</text>
+        <text x="540" y="130" fill="#e6edf3" font-size="12">&nbsp;&nbsp;<tspan fill="#3fb950">+</tspan> token version <tspan font-weight="700">tv</tspan> still current (O(1))</text>
+        <text x="540" y="162" fill="#8b949e" font-size="11.5">The <tspan fill="#d2a8ff">tv</tspan> claim is the whole trick: bump the user's</text>
+        <text x="540" y="180" fill="#8b949e" font-size="11.5">version and every old token is instantly stale.</text>
+      </svg>
+    </div>
+
+    <h3>Token lifecycle &amp; revocation paths</h3>
+    <div class="diagram">
+      <svg viewBox="0 0 960 420" role="img" aria-label="Session token lifecycle">
+        <defs>
+          <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+          <marker id="a2r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f85149"/></marker>
+        </defs>
+
+        <!-- login -->
+        <rect x="20" y="30" width="200" height="70" rx="8" fill="#151b22" stroke="#58a6ff"/>
+        <text x="120" y="55" fill="#58a6ff" font-size="13" font-weight="700" text-anchor="middle">login()</text>
+        <text x="120" y="76" fill="#8b949e" font-size="11" text-anchor="middle">new session id (sid)</text>
+        <text x="120" y="92" fill="#8b949e" font-size="11" text-anchor="middle">issue access + refresh</text>
+
+        <!-- token pair -->
+        <rect x="300" y="20" width="300" height="44" rx="8" fill="#0a0d11" stroke="#3fb950"/>
+        <text x="315" y="40" fill="#3fb950" font-size="12" font-weight="700">Access JWT · 60s</text>
+        <text x="315" y="57" fill="#8b949e" font-size="10.5">claims: sub · sid · tv · typ=access</text>
+
+        <rect x="300" y="72" width="300" height="44" rx="8" fill="#0a0d11" stroke="#d29922"/>
+        <text x="315" y="92" fill="#d29922" font-size="12" font-weight="700">Refresh JWT · 900s (single-use jti)</text>
+        <text x="315" y="109" fill="#8b949e" font-size="10.5">stored jti on the session row</text>
+
+        <line x1="220" y1="65" x2="298" y2="55" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- validate -->
+        <rect x="680" y="20" width="260" height="96" rx="8" fill="#151b22" stroke="#222b34"/>
+        <text x="810" y="42" fill="#e6edf3" font-size="12" font-weight="700" text-anchor="middle">validateAccess()</text>
+        <text x="696" y="63" fill="#8b949e" font-size="11">✓ signature + not expired</text>
+        <text x="696" y="81" fill="#8b949e" font-size="11">✓ session exists &amp; !revoked</text>
+        <text x="696" y="99" fill="#8b949e" font-size="11">✓ tv == user.tokenVersion</text>
+        <line x1="600" y1="42" x2="678" y2="55" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- refresh rotation -->
+        <rect x="300" y="150" width="300" height="88" rx="8" fill="#151b22" stroke="#d29922"/>
+        <text x="450" y="172" fill="#d29922" font-size="12" font-weight="700" text-anchor="middle">refresh() — rotation</text>
+        <text x="316" y="193" fill="#8b949e" font-size="11">jti matches session? → mint NEW pair,</text>
+        <text x="316" y="210" fill="#8b949e" font-size="11">store new jti (old one now dead)</text>
+        <text x="316" y="228" fill="#f85149" font-size="11">old jti replayed? → THEFT → revoke session</text>
+        <line x1="450" y1="116" x2="450" y2="148" stroke="#d29922" stroke-width="1.5" marker-end="url(#a2)"/>
+
+        <!-- revocation box -->
+        <rect x="20" y="270" width="920" height="130" rx="10" fill="#0a0d11" stroke="#f85149" stroke-dasharray="5 4"/>
+        <text x="40" y="294" fill="#f85149" font-size="13" font-weight="700">Revocation paths</text>
+
+        <rect x="40" y="308" width="280" height="76" rx="8" fill="#151b22" stroke="#222b34"/>
+        <text x="52" y="330" fill="#e6edf3" font-size="12" font-weight="700">logout ONE device</text>
+        <text x="52" y="350" fill="#8b949e" font-size="11">session.revoke() on that sid</text>
+        <text x="52" y="368" fill="#8b949e" font-size="11">other devices untouched</text>
+
+        <rect x="340" y="308" width="280" height="76" rx="8" fill="#151b22" stroke="#f85149"/>
+        <text x="352" y="330" fill="#f85149" font-size="12" font-weight="700">logout EVERYWHERE / pw change</text>
+        <text x="352" y="350" fill="#8b949e" font-size="11">bumpTokenVersion() → +1</text>
+        <text x="352" y="368" fill="#8b949e" font-size="11">every old tv now stale → all dead</text>
+
+        <rect x="640" y="308" width="280" height="76" rx="8" fill="#151b22" stroke="#222b34"/>
+        <text x="652" y="330" fill="#e6edf3" font-size="12" font-weight="700">theft containment</text>
+        <text x="652" y="350" fill="#8b949e" font-size="11">rotated-token replay detected</text>
+        <text x="652" y="368" fill="#8b949e" font-size="11">→ that session revoked</text>
+      </svg>
+    </div>
+
+    <h3>Key tech by responsibility</h3>
+    <table>
+      <tr><th>Responsibility</th><th>Mechanism</th></tr>
+      <tr><td><b>Sign / parse</b></td><td><code>JwtService</code> — jjwt 0.12.6, HMAC-SHA256, shared secret</td></tr>
+      <tr><td><b>Instant global revoke</b></td><td><code>tv</code> claim vs <code>UserAccount.tokenVersion</code>; <code>bumpTokenVersion()</code></td></tr>
+      <tr><td><b>Per-device revoke</b></td><td><code>Session.revoke()</code>, checked in <code>validateAccess</code></td></tr>
+      <tr><td><b>Refresh rotation</b></td><td><code>refresh()</code> swaps the stored <code>jti</code> on each use</td></tr>
+      <tr><td><b>Theft detection</b></td><td>replay of a rotated <code>jti</code> ⇒ revoke session</td></tr>
+    </table>
+
+    <div class="debt">
+      <h4>⚠️ Tech debt to acknowledge</h4>
+      <ul>
+        <li><b>All state in-memory</b> (<code>ConcurrentHashMap</code>) — biggest scale-out blocker.</li>
+        <li>Toy password hash (<code>Integer.toHexString(hashCode())</code>) — use BCrypt/Argon2.</li>
+        <li>Symmetric HMAC secret in config — prefer asymmetric signing + key rotation.</li>
+        <li>No absolute session lifetime cap; refreshing session lives forever.</li>
+        <li>No eviction of expired/revoked sessions — map grows unbounded.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================ 30 RATE LIMIT ============================ -->
+  <section class="poc" id="ratelimit">
+    <div class="lead">
+      <h2>Tiered Rate Limiting <span class="pill port">port 8083</span></h2>
+      <div>Token-bucket limits per plan tier (<b>Free / Pro / Enterprise</b>) across three
+        <b>independent</b> dimensions — user, IP, endpoint. Any dimension tripping ⇒ <code>429</code>
+        with a precise <code>Retry-After</code>.</div>
+      <div class="protect">🛡️ <b>Protecting:</b> service availability &amp; fairness — paying tiers keep
+        their quota, abusers get contained, honest clients get actionable back-pressure.</div>
+    </div>
+
+    <h3>The flow — one request draws from three buckets at once</h3>
+    <div class="diagram">
+      <svg viewBox="0 0 960 380" role="img" aria-label="Three-dimensional rate limit flow">
+        <defs>
+          <marker id="a3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+        </defs>
+        <rect x="20" y="150" width="150" height="70" rx="8" fill="#151b22" stroke="#58a6ff"/>
+        <text x="95" y="180" fill="#58a6ff" font-size="13" font-weight="700" text-anchor="middle">POST /call</text>
+        <text x="95" y="200" fill="#8b949e" font-size="10.5" text-anchor="middle">user · ip · endpoint</text>
+
+        <!-- three buckets -->
+        <rect x="300" y="30" width="330" height="80" rx="8" fill="#151b22" stroke="#3fb950"/>
+        <text x="316" y="54" fill="#3fb950" font-size="12" font-weight="700">USER bucket — by tier</text>
+        <text x="316" y="74" fill="#8b949e" font-size="11">FREE 20/min · PRO 120/min · ENT 600/min</text>
+        <text x="316" y="94" fill="#8b949e" font-size="11">tryConsume(1)</text>
+
+        <rect x="300" y="130" width="330" height="80" rx="8" fill="#151b22" stroke="#d29922"/>
+        <text x="316" y="154" fill="#d29922" font-size="12" font-weight="700">IP bucket — PRO cap</text>
+        <text x="316" y="174" fill="#8b949e" font-size="11">one NAT'd office / bot swarm can't</text>
+        <text x="316" y="194" fill="#8b949e" font-size="11">soak a shared pool · tryConsume(1)</text>
+
+        <rect x="300" y="230" width="330" height="80" rx="8" fill="#151b22" stroke="#d2a8ff"/>
+        <text x="316" y="254" fill="#d2a8ff" font-size="12" font-weight="700">ENDPOINT bucket — soft cap</text>
+        <text x="316" y="274" fill="#8b949e" font-size="11">one hot endpoint can't lock you out</text>
+        <text x="316" y="294" fill="#8b949e" font-size="11">of the others · tryConsume(1)</text>
+
+        <line x1="170" y1="175" x2="298" y2="70" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="170" y1="185" x2="298" y2="170" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="170" y1="195" x2="298" y2="270" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a3)"/>
+
+        <!-- decision -->
+        <rect x="700" y="70" width="240" height="90" rx="8" fill="#0a0d11" stroke="#3fb950"/>
+        <text x="820" y="98" fill="#3fb950" font-size="13" font-weight="700" text-anchor="middle">all pass → 200 OK</text>
+        <text x="820" y="120" fill="#8b949e" font-size="11" text-anchor="middle">X-RateLimit-User-Remaining</text>
+        <text x="820" y="138" fill="#8b949e" font-size="11" text-anchor="middle">responseBody returned</text>
+
+        <rect x="700" y="190" width="240" height="110" rx="8" fill="#0a0d11" stroke="#f85149"/>
+        <text x="820" y="216" fill="#f85149" font-size="13" font-weight="700" text-anchor="middle">any fails → 429</text>
+        <text x="820" y="238" fill="#8b949e" font-size="11" text-anchor="middle">Retry-After = MAX(deficits)</text>
+        <text x="820" y="258" fill="#8b949e" font-size="11" text-anchor="middle">violatedDimension named</text>
+        <text x="820" y="278" fill="#8b949e" font-size="11" text-anchor="middle">retry actually succeeds</text>
+
+        <line x1="630" y1="70" x2="698" y2="100" stroke="#3fb950" stroke-width="1.5" marker-end="url(#a3)"/>
+        <line x1="630" y1="270" x2="698" y2="240" stroke="#f85149" stroke-width="1.5" marker-end="url(#a3)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#3fb950"></span>per-user (tiered)</span>
+        <span><span class="dot" style="background:#d29922"></span>per-IP</span>
+        <span><span class="dot" style="background:#d2a8ff"></span>per-endpoint</span>
+      </div>
+    </div>
+
+    <h3>Inside one bucket — burst vs steady-state, refilled lazily</h3>
+    <div class="cols two">
+      <div class="card">
+        <h4>capacity = burst</h4>
+        <p>A full bucket lets a client spend <code>capacity</code> tokens in one instant — the
+          legitimate "page fires 10 quotes at once" case.</p>
+        <h4 style="margin-top:12px">refill rate = steady-state</h4>
+        <p><code>tokens += elapsed × (refillTokens / interval)</code>, capped at capacity. Computed
+          <b>on read</b> — no scheduler thread.</p>
+      </div>
+      <div class="card">
+        <h4>precise Retry-After</h4>
+        <p>On a miss: <code>ceil(deficit / tokensPerMs)</code> gives the exact wait for <i>this</i>
+          bucket. The service returns the <b>max</b> across tripped dimensions so the client's retry
+          clears every limit at once.</p>
+        <h4 style="margin-top:12px">thread safety</h4>
+        <p><code>synchronized tryConsume/snapshot</code>; dimension maps are <code>ConcurrentHashMap</code>.</p>
+      </div>
+    </div>
+
+    <div class="debt">
+      <h4>⚠️ Tech debt to acknowledge</h4>
+      <ul>
+        <li><b>Per-pod buckets</b> — N replicas ⇒ N× the real limit. Needs atomic Redis Lua.</li>
+        <li>Tiers are a hardcoded enum; real systems read a <code>tier_quotas</code> table.</li>
+        <li>IP &amp; endpoint maps never evict — needs TTL/LRU.</li>
+        <li>Every call costs 1 token; expensive endpoints should cost more.</li>
+        <li>Wall-clock refill drifts across hosts — a distributed version must use the Redis clock.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================ SCALING ============================ -->
+  <section class="poc" id="scale">
+    <div class="lead">
+      <h2>Scaling &amp; Consistency <span class="pill port">k8s / VMs</span></h2>
+      <div>Every POC is correct on <b>one</b> process. The moment you run <b>N replicas</b> behind
+        a load balancer, each holds its own private copy of "the truth." Full detail in
+        <a href="CONSISTENCY.md">CONSISTENCY.md</a>.</div>
+    </div>
+
+    <h3>Why it breaks — state trapped in the JVM heap</h3>
+    <div class="diagram">
+      <svg viewBox="0 0 960 300" role="img" aria-label="Scale-out divergence">
+        <defs>
+          <marker id="a4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+        </defs>
+        <rect x="20" y="120" width="160" height="60" rx="8" fill="#151b22" stroke="#58a6ff"/>
+        <text x="100" y="147" fill="#58a6ff" font-size="13" font-weight="700" text-anchor="middle">Load Balancer</text>
+        <text x="100" y="166" fill="#8b949e" font-size="10.5" text-anchor="middle">round-robins a user</text>
+
+        <rect x="300" y="30" width="230" height="70" rx="8" fill="#151b22" stroke="#f85149"/>
+        <text x="415" y="55" fill="#f85149" font-size="12" font-weight="700" text-anchor="middle">Pod A</text>
+        <text x="415" y="76" fill="#8b949e" font-size="10.5" text-anchor="middle">buckets / sessions / tv (copy A)</text>
+
+        <rect x="300" y="120" width="230" height="70" rx="8" fill="#151b22" stroke="#f85149"/>
+        <text x="415" y="145" fill="#f85149" font-size="12" font-weight="700" text-anchor="middle">Pod B</text>
+        <text x="415" y="166" fill="#8b949e" font-size="10.5" text-anchor="middle">…disagrees with A</text>
+
+        <rect x="300" y="210" width="230" height="70" rx="8" fill="#151b22" stroke="#f85149"/>
+        <text x="415" y="235" fill="#f85149" font-size="12" font-weight="700" text-anchor="middle">Pod C</text>
+        <text x="415" y="256" fill="#8b949e" font-size="10.5" text-anchor="middle">…disagrees with both</text>
+
+        <line x1="180" y1="145" x2="298" y2="65" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="180" y1="150" x2="298" y2="150" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a4)"/>
+        <line x1="180" y1="155" x2="298" y2="240" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#a4)"/>
+
+        <rect x="640" y="90" width="300" height="130" rx="10" fill="#0a0d11" stroke="#3fb950"/>
+        <text x="790" y="116" fill="#3fb950" font-size="13" font-weight="700" text-anchor="middle">Fix: relocate state</text>
+        <text x="658" y="142" fill="#8b949e" font-size="11.5">Redis — buckets, sessions, token-version</text>
+        <text x="658" y="164" fill="#8b949e" font-size="11.5">Oracle — durable merge records + locks</text>
+        <text x="658" y="186" fill="#8b949e" font-size="11.5">Pods become stateless → any pod, any</text>
+        <text x="658" y="204" fill="#8b949e" font-size="11.5">request. Algorithms unchanged.</text>
+      </svg>
+    </div>
+
+    <h3>What breaks per POC, and the fix</h3>
+    <table>
+      <tr><th>POC</th><th>State today</th><th>Breaks because…</th><th>Fix</th></tr>
+      <tr>
+        <td><b>28 Merge</b></td>
+        <td>H2 in-memory</td>
+        <td>per-pod H2 diverges; concurrent merges race → redirect cycles</td>
+        <td>shared Oracle + <code>SELECT…FOR UPDATE</code> (ordered) + <code>@Version</code></td>
+      </tr>
+      <tr>
+        <td><b>29 Sessions</b></td>
+        <td><code>ConcurrentHashMap</code></td>
+        <td><b>revoke / tv bump invisible to other pods</b> — a real security hole</td>
+        <td>Redis: atomic <code>INCR tv</code>, shared session store, Lua refresh rotation</td>
+      </tr>
+      <tr>
+        <td><b>30 Rate Limit</b></td>
+        <td><code>ConcurrentHashMap</code></td>
+        <td>N pods ⇒ N× the limit, non-deterministic under an HPA</td>
+        <td>single atomic Redis <b>Lua</b> refill→check→decrement + key TTL</td>
+      </tr>
+    </table>
+
+    <div class="scale">
+      <h4>Kubernetes-specific gotchas</h4>
+      <ul>
+        <li><b>Rolling deploys run mixed versions</b> — keep Redis key schema &amp; JWT claims backward-compatible for one release (expand → migrate → contract).</li>
+        <li><b>Pods are cattle</b> — <code>SIGTERM</code> any time; never keep authoritative state only in a pod.</li>
+        <li><b>HPA vs rate limiter</b> — if buckets aren't centralized, scaling up to shed load also raises the effective limit; the limiter fights the autoscaler.</li>
+        <li><b>Readiness ≠ liveness</b> — lose Redis/Oracle ⇒ fail readiness (stop traffic), not liveness (avoid restart storms).</li>
+        <li><b>No sticky sessions</b> — externalizing state means any pod serves any request; affinity hides the bug and breaks on rebalance.</li>
+      </ul>
+    </div>
+    <p style="color:var(--muted);font-size:13px;margin-top:14px">
+      <b>Bottom line:</b> scaling this suite is not a rewrite — the algorithms are already right.
+      It's a <b>relocation of state</b> out of the JVM into Redis (atomic ops) and shared Oracle
+      (row locking), leaving every replica stateless.
+    </p>
+  </section>
+
+  <footer>
+    Auth &amp; Access POC Suite · Java 21 / Spring Boot 3.4.3 · open-and-read explainer (works over <code>file://</code>)
+  </footer>
+</main>
+
+<script>
+  const tabs = document.querySelectorAll('nav.tabs button');
+  const secs = document.querySelectorAll('section.poc');
+  tabs.forEach(btn => btn.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.remove('active'));
+    secs.forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }));
+</script>
+</body>
+</html>

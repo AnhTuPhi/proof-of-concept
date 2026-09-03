@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kafka Production Patterns — POC Explorer</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121826; --panel2:#0f1420; --line:#222c40;
+    --ink:#e7ecf5; --muted:#96a2b8; --accent:#4fc3f7; --accent2:#7c5cff;
+    --ok:#37d67a; --warn:#ffb020; --bad:#ff5c6c; --chip:#1b2437;
+    --mono:"SF Mono",ui-monospace,"Cascadia Code",Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#16203a 0%,var(--bg) 60%);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  a{color:var(--accent);text-decoration:none}
+  header{padding:34px 24px 10px;max-width:1180px;margin:0 auto}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.3px}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--muted);max-width:760px}
+  .stack{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .pill{font-size:12px;color:var(--muted);background:var(--chip);border:1px solid var(--line);padding:4px 10px;border-radius:999px}
+  nav{position:sticky;top:0;z-index:10;background:rgba(11,15,23,.82);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin-top:18px}
+  nav .wrap{max-width:1180px;margin:0 auto;display:flex;gap:4px;padding:8px 16px;overflow-x:auto}
+  nav button{white-space:nowrap;background:transparent;border:1px solid transparent;color:var(--muted);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+  nav button:hover{color:var(--ink)}
+  nav button.active{color:var(--ink);background:var(--panel);border-color:var(--line)}
+  main{max-width:1180px;margin:0 auto;padding:26px 24px 90px}
+  section{display:none;animation:fade .25s ease}
+  section.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  h2{font-size:21px;margin:6px 0 4px}
+  .lead{color:var(--muted);margin:0 0 20px;max-width:820px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;cursor:pointer;transition:.15s;position:relative;overflow:hidden}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .card .num{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:700}
+  .card h3{margin:6px 0 6px;font-size:16px}
+  .card p{margin:0;color:var(--muted);font-size:13px}
+  .card .port{position:absolute;top:14px;right:14px;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--chip);padding:2px 8px;border-radius:6px;border:1px solid var(--line)}
+  .card .reveal{max-height:0;overflow:hidden;transition:max-height .3s ease;color:var(--ink);font-size:13px}
+  .card.open .reveal{max-height:340px;margin-top:10px}
+  .card .reveal .row{border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
+  .tag{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:5px;margin:2px 4px 0 0;border:1px solid var(--line);background:var(--chip);color:var(--muted)}
+  .k{color:var(--accent)} .b{color:var(--bad)} .g{color:var(--ok)} .w{color:var(--warn)} .p{color:var(--accent2)}
+  table{width:100%;border-collapse:collapse;margin:8px 0 18px;font-size:13px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+  tr:hover td{background:#0f1524}
+  code{font-family:var(--mono);font-size:12px;background:var(--chip);padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:18px}
+  .panel h3{margin:0 0 4px;font-size:16px}
+  .flow-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .btn{background:var(--accent);color:#04121c;border:none;font-weight:700;padding:9px 16px;border-radius:9px;cursor:pointer;font-size:13px}
+  .btn.ghost{background:var(--chip);color:var(--ink);border:1px solid var(--line)}
+  .btn:active{transform:translateY(1px)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+  svg{width:100%;height:auto;display:block}
+  .node rect{transition:.3s}
+  .msg{opacity:0}
+  .log{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;height:150px;overflow:auto;margin-top:12px}
+  .log div{padding:1px 0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .note{font-size:12px;color:var(--muted);border-left:3px solid var(--accent2);padding:4px 0 4px 12px;margin:10px 0}
+  footer{max-width:1180px;margin:0 auto;padding:0 24px 60px;color:var(--muted);font-size:13px}
+  .modebar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .modebar button{background:var(--chip);border:1px solid var(--line);color:var(--muted);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-family:var(--mono)}
+  .modebar button.active{color:var(--ink);border-color:var(--accent);background:#10233030}
+  .verdict{font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kafka <span>Production Patterns</span> — POC Explorer</h1>
+  <p class="sub">Twelve runnable Spring Boot modules, each isolating one way Kafka quietly breaks in production —
+  and the fix that holds. This page explains the flows, the key tech by responsibility, and lets you play the
+  failure modes.</p>
+  <div class="stack">
+    <span class="pill">Kafka 4.0 (KRaft)</span>
+    <span class="pill">Spring Boot 3.4 · Java 21</span>
+    <span class="pill">Oracle 23ai</span>
+    <span class="pill">Elasticsearch 8.15</span>
+    <span class="pill">Schema Registry 7.7</span>
+    <span class="pill">Debezium CDC</span>
+  </div>
+</header>
+
+<nav><div class="wrap" id="tabs">
+  <button data-t="modules" class="active">12 Patterns</button>
+  <button data-t="flow">Order Lifecycle</button>
+  <button data-t="offsets">Delivery Semantics</button>
+  <button data-t="outbox">Dual-Write / Outbox</button>
+  <button data-t="scale">Scaling Law</button>
+  <button data-t="stack">The Stack</button>
+</div></nav>
+
+<main>
+  <!-- ===================== MODULES ===================== -->
+  <section id="modules" class="active">
+    <h2>The 12 patterns</h2>
+    <p class="lead">Click a card to reveal the hard problem, what it protects, and the key tech.
+    Full engineering write-up in <a href="../TECHNICAL.md">TECHNICAL.md</a>.</p>
+    <div class="grid" id="cardGrid"></div>
+  </section>
+
+  <!-- ===================== FLOW ===================== -->
+  <section id="flow">
+    <h2>The order lifecycle across the modules</h2>
+    <p class="lead">One order flows through outbox → transactions → saga → projection. Press play to watch an
+    event move through the system, or trigger a payment failure to see the saga compensate.</p>
+    <div class="panel">
+      <div class="flow-controls">
+        <button class="btn" onclick="playFlow(false)">▶ Happy path</button>
+        <button class="btn ghost" onclick="playFlow(true)">⚠ Force payment failure</button>
+        <button class="btn ghost" onclick="resetFlow()">Reset</button>
+      </div>
+      <svg viewBox="0 0 900 360" id="flowSvg" aria-label="event flow diagram"></svg>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--accent)"></i> event topic</span>
+        <span><i class="dot" style="background:var(--accent2)"></i> service / DB write</span>
+        <span><i class="dot" style="background:var(--ok)"></i> success</span>
+        <span><i class="dot" style="background:var(--bad)"></i> compensation</span>
+      </div>
+      <div class="log" id="flowLog"></div>
+    </div>
+  </section>
+
+  <!-- ===================== OFFSETS ===================== -->
+  <section id="offsets">
+    <h2>Delivery semantics: when do you commit the offset?</h2>
+    <p class="lead">Module 03. The offset is a <em>promise</em> that work is done — not a receipt that it started.
+    Pick a commit mode, then crash the consumer mid-batch and see what survives.</p>
+    <div class="panel">
+      <div class="modebar" id="modeBar"></div>
+      <div class="cols">
+        <div>
+          <div class="flow-controls">
+            <button class="btn" onclick="runOffset()">▶ Consume 100 & crash at 50</button>
+            <button class="btn ghost" onclick="restartOffset()">↻ Restart consumer</button>
+          </div>
+          <svg viewBox="0 0 420 120" id="offsetSvg"></svg>
+        </div>
+        <div>
+          <div id="offsetVerdict" class="verdict" style="margin-bottom:8px">Pick a mode and run.</div>
+          <div class="log" id="offsetLog" style="height:210px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== OUTBOX ===================== -->
+  <section id="outbox">
+    <h2>The dual-write problem &amp; the transactional outbox</h2>
+    <p class="lead">Module 06. You must change the DB <em>and</em> publish an event. Do them as two independent
+    operations and one can fail alone — a ghost event or a lost event. The outbox makes them one atomic write.</p>
+    <div class="cols">
+      <div class="panel">
+        <h3 class="b">✗ Naïve dual write</h3>
+        <p style="color:var(--muted);font-size:13px">Two separate operations. No atomicity.</p>
+        <button class="btn ghost" onclick="dualWrite()">Simulate (random broker blip)</button>
+        <div class="log" id="dwLog" style="height:160px"></div>
+      </div>
+      <div class="panel">
+        <h3 class="g">✓ Transactional outbox</h3>
+        <p style="color:var(--muted);font-size:13px">DB row + outbox row in one transaction. A poller ships it later with <code>SKIP LOCKED</code>.</p>
+        <button class="btn" onclick="outboxWrite()">Simulate (same broker blip)</button>
+        <div class="log" id="obLog" style="height:160px"></div>
+      </div>
+    </div>
+    <div class="note">Key insight: the poller marking a row <code>published_at</code> only <b>after</b> the broker ack
+    means a publish failure is retried, never lost. Idempotent producer + event-id header dedupes the rare double-send.</div>
+  </section>
+
+  <!-- ===================== SCALE ===================== -->
+  <section id="scale">
+    <h2>The one law of scaling</h2>
+    <p class="lead">Full detail in <a href="../CONSISTENCY.md">CONSISTENCY.md</a>. Partition count is the ceiling on
+    consumer parallelism. Drag the replica count and watch when pods go idle.</p>
+    <div class="panel">
+      <label style="font-size:13px;color:var(--muted)">Topic partitions: <b id="pLbl" style="color:var(--ink)">6</b>
+        <input type="range" min="1" max="12" value="6" id="pRange" style="vertical-align:middle;width:200px">
+      </label>
+      &nbsp;&nbsp;
+      <label style="font-size:13px;color:var(--muted)">Consumer replicas (pods): <b id="rLbl" style="color:var(--ink)">3</b>
+        <input type="range" min="1" max="12" value="3" id="rRange" style="vertical-align:middle;width:200px">
+      </label>
+      <svg viewBox="0 0 900 220" id="scaleSvg" style="margin-top:14px"></svg>
+      <div id="scaleVerdict" class="verdict" style="margin-top:8px"></div>
+    </div>
+    <table>
+      <tr><th>Identity</th><th>Module</th><th>Why it must be stable</th><th>Controller</th></tr>
+      <tr><td><code>transactional.id</code></td><td>02 transactions</td><td>zombie fencing after crash</td><td>StatefulSet ordinal</td></tr>
+      <tr><td><code>group.instance.id</code></td><td>05 rebalancing</td><td>skip rebalance on short restart</td><td>StatefulSet ordinal</td></tr>
+      <tr><td><code>SKIP LOCKED</code> lease</td><td>06 outbox</td><td>many pollers drain in parallel, no leader election</td><td>Deployment (any N)</td></tr>
+      <tr><td>event key = <code>orderId</code></td><td>07 saga / 08 CQRS</td><td>a saga's steps stay ordered on one partition</td><td>Deployment (any N)</td></tr>
+    </table>
+  </section>
+
+  <!-- ===================== STACK ===================== -->
+  <section id="stack">
+    <h2>The stack &amp; how to run it</h2>
+    <p class="lead">Everything is a single <code>docker-compose.yml</code> with profiles, plus <code>./mvnw</code> per module.</p>
+    <table>
+      <tr><th>Service</th><th>URL / endpoint</th><th>Used by</th></tr>
+      <tr><td>Kafka 4.0 (KRaft)</td><td><code>localhost:9092</code></td><td>all</td></tr>
+      <tr><td>Kafka UI</td><td><code>localhost:8080</code></td><td>inspection</td></tr>
+      <tr><td>Schema Registry</td><td><code>localhost:8081</code></td><td>11 avro</td></tr>
+      <tr><td>Kafka Connect</td><td><code>localhost:8083</code></td><td>12 CDC</td></tr>
+      <tr><td>Oracle 23ai</td><td><code>localhost:1521/FREEPDB1</code></td><td>03, 06, 07</td></tr>
+      <tr><td>Elasticsearch / Kibana</td><td><code>localhost:9200</code> / <code>5601</code></td><td>08, 12</td></tr>
+      <tr><td>Prometheus / Grafana</td><td><code>localhost:9090</code> / <code>3000</code></td><td>05 lag/throughput</td></tr>
+    </table>
+    <div class="panel">
+      <h3>Quick start</h3>
+<pre style="font-family:var(--mono);font-size:12.5px;color:var(--ink);overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px">./scripts/setup.sh                        <span style="color:var(--muted)"># infra up + topics</span>
+./mvnw clean install -DskipTests
+./mvnw -pl 06-outbox-pattern spring-boot:run   <span style="color:var(--muted)"># run any module</span>
+
+curl -X POST 'localhost:8106/orders?customerId=cust-1&amount=99.99'
+curl -X POST 'localhost:8103/offsets/start?mode=IDEMPOTENT_AFTER&crashAfter=50'</pre>
+    </div>
+    <p class="lead">Docs: <a href="../ISSUE.md">ISSUE.md</a> · <a href="../TECHNICAL.md">TECHNICAL.md</a> ·
+      <a href="../CONSISTENCY.md">CONSISTENCY.md</a> · <a href="../README.md">README.md</a></p>
+  </section>
+</main>
+
+<footer>Reference artifact — teaching the delivery-semantics, offset-ownership, transactional-boundary,
+rebalancing and schema-evolution decisions that decide whether a Kafka deployment survives production.</footer>
+
+<script>
+/* ---------- tab switching ---------- */
+const tabs=document.getElementById('tabs');
+tabs.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  [...tabs.children].forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active',s.id===b.dataset.t));
+  if(b.dataset.t==='flow') buildFlow();
+  if(b.dataset.t==='scale') drawScale();
+});
+
+/* ---------- module cards ---------- */
+const MODULES=[
+ {n:'01',port:'8101',t:'Idempotent Producer',p:'The floor for any safe producer.',
+  prob:'<code>acks=1</code> + leader failover silently drops the record; retries with multiple in-flight requests reorder and duplicate.',
+  protect:'Every produced fact — no silent loss, no dup within a session, no reorder.',
+  tech:['acks=all','enable.idempotence','max.in.flight=5','bounded delivery.timeout']},
+ {n:'02',port:'8102',t:'Transactions',p:'Exactly-once across topics.',
+  prob:'Produce to topic A, crash before topic B + offset commit → restart double-produces to A.',
+  protect:'Atomic fan-out: both outputs and the input offset commit, or none.',
+  tech:['sendOffsetsToTransaction','read_committed','stable transactional.id','fence → shut down']},
+ {n:'03',port:'8103',t:'Offset Management',p:'The most important module.',
+  prob:'Commit before the work = lost message on crash. Auto-commit hides it from you.',
+  protect:'A message is "done" only after its side effect succeeded; replays don\'t double-apply.',
+  tech:['enable.auto.commit=false','commit AFTER work','idempotency table','event-id key']},
+ {n:'04',port:'8104',t:'DLQ + Poison Message',p:'One bad record can\'t wedge a partition.',
+  prob:'In-line retry of an always-failing message blocks the whole partition forever.',
+  protect:'Partition liveness + a recoverable quarantine for bad messages.',
+  tech:['@RetryableTopic','exponential backoff','PoisonMessageException','@DltHandler + replay']},
+ {n:'05',port:'8105',t:'Rebalancing + Backpressure',p:'Survive deploys and load spikes.',
+  prob:'Eager rebalance freezes consumers each deploy; a slow handler blows max.poll.interval → rebalance storm.',
+  protect:'Availability and progress during deploys and spikes.',
+  tech:['static membership','cooperative-sticky','pause()/resume()','commit on revoke']},
+ {n:'06',port:'8106',t:'Transactional Outbox',p:'The dual-write fix.',
+  prob:'DB change + Kafka publish as two ops → ghost event or lost event.',
+  protect:'Event completeness: DB row and its event are all-or-nothing.',
+  tech:['one @Transactional insert','FOR UPDATE SKIP LOCKED','ack-then-mark','event-id header']},
+ {n:'07',port:'8107',t:'Saga Orchestration',p:'Multi-service workflow, no global txn.',
+  prob:'Payment fails after inventory reserved — must release reserve and cancel order, with no distributed transaction.',
+  protect:'Eventual consistency of a workflow via compensation, not rollback.',
+  tech:['event choreography','local @Transactional + emit','compensating events','key = orderId']},
+ {n:'08',port:'8108',t:'CQRS Projection',p:'Query model from out-of-order events.',
+  prob:'OrderShipped can arrive before OrderPlaced; overwriting the doc loses data / regresses state.',
+  protect:'Convergence: correct final state under any arrival order, never regressing.',
+  tech:['doc_as_upsert','occurredAt staleness guard','partial updates','denormalized read model']},
+ {n:'09',port:'8109',t:'Streams: Windowing',p:'Aggregate over time, keep late data.',
+  prob:'Late records are dropped silently unless you set a grace period and instrument it.',
+  protect:'Completeness of time-bucketed metrics.',
+  tech:['tumbling','hopping','session windows','explicit grace period']},
+ {n:'10',port:'8110',t:'Streams: Joins',p:'Enrich without silently-wrong results.',
+  prob:'Non-co-partitioned joins never match — no error, just wrong output.',
+  protect:'Correctness of enrichment and attribution.',
+  tech:['KStream-KTable','GlobalKTable','temporal KStream-KStream','repartition()']},
+ {n:'11',port:'8111',t:'Schema Registry + Avro',p:'Evolve contracts safely.',
+  prob:'A "harmless" field rename breaks every consumer that hasn\'t redeployed.',
+  protect:'The event contract — evolve producers without breaking consumers.',
+  tech:['BACKWARD compat','nullable union + default','specific.avro.reader','CI registration gate']},
+ {n:'12',port:'—',t:'CDC Pipeline',p:'Oracle → Kafka → ES, zero app code.',
+  prob:'Get committed DB changes downstream with no consumer code and no polling latency.',
+  protect:'A hands-off, low-latency pipeline whose failures are operational, not bugs.',
+  tech:['Debezium LogMiner','Outbox Router SMT','idempotent ES upsert','sink DLQ topic']},
+];
+const grid=document.getElementById('cardGrid');
+MODULES.forEach(m=>{
+  const el=document.createElement('div');el.className='card';
+  el.innerHTML=`<span class="port">:${m.port}</span><div class="num">MODULE ${m.n}</div>
+    <h3>${m.t}</h3><p>${m.p}</p>
+    <div class="reveal">
+      <div class="row"><b class="b">Hard problem.</b> ${m.prob}</div>
+      <div class="row"><b class="g">Protects.</b> ${m.protect}</div>
+      <div class="row"><b>Key tech.</b><br>${m.tech.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+    </div>`;
+  el.onclick=()=>el.classList.toggle('open');
+  grid.appendChild(el);
+});
+
+/* ---------- flow diagram ---------- */
+const FSVG=document.getElementById('flowSvg');
+const flowNodes=[
+  {id:'api',x:40,y:150,w:110,h:46,label:'REST /orders',c:'var(--accent2)'},
+  {id:'db',x:190,y:150,w:120,h:46,label:'Oracle txn\norder+outbox',c:'var(--accent2)'},
+  {id:'placed',x:360,y:60,w:120,h:44,label:'orders.placed',c:'var(--accent)'},
+  {id:'inv',x:360,y:150,w:120,h:44,label:'inventory\nreserved',c:'var(--accent)'},
+  {id:'pay',x:530,y:150,w:120,h:44,label:'payment',c:'var(--accent2)'},
+  {id:'ship',x:700,y:60,w:120,h:44,label:'shipping\nscheduled',c:'var(--accent)'},
+  {id:'proj',x:700,y:230,w:120,h:44,label:'ES projection\n(CQRS)',c:'var(--accent2)'},
+  {id:'cancel',x:530,y:250,w:120,h:44,label:'order\nCANCELLED',c:'var(--bad)'},
+];
+const flowEdges=[['api','db'],['db','placed'],['db','inv'],['inv','pay'],['pay','ship'],['ship','proj'],['placed','proj']];
+function buildFlow(){
+  let s='';
+  flowEdges.forEach(([a,b])=>{const n1=byId(a),n2=byId(b);
+    s+=`<line x1="${n1.x+n1.w}" y1="${n1.y+n1.h/2}" x2="${n2.x}" y2="${n2.y+n2.h/2}" stroke="var(--line)" stroke-width="2" marker-end="url(#arr)"/>`});
+  // compensation edge pay->cancel, pay->inv(release)
+  const p=byId('pay'),c=byId('cancel'),inv=byId('inv');
+  s+=`<line id="e-cancel" x1="${p.x+p.w/2}" y1="${p.y+p.h}" x2="${c.x+c.w/2}" y2="${c.y}" stroke="var(--bad)" stroke-width="2" stroke-dasharray="5 4" opacity=".25"/>`;
+  s+=`<line id="e-release" x1="${p.x}" y1="${p.y+p.h}" x2="${inv.x+inv.w}" y2="${inv.y+inv.h}" stroke="var(--bad)" stroke-width="2" stroke-dasharray="5 4" opacity=".25"/>`;
+  flowNodes.forEach(n=>{
+    s+=`<g class="node" id="n-${n.id}"><rect x="${n.x}" y="${n.y}" rx="9" width="${n.w}" height="${n.h}" fill="var(--panel)" stroke="${n.c}" stroke-width="1.5"/>`;
+    n.label.split('\n').forEach((ln,i,a)=>{
+      s+=`<text x="${n.x+n.w/2}" y="${n.y+n.h/2 - (a.length-1)*7 + i*14 +4}" fill="var(--ink)" font-size="11" text-anchor="middle" font-family="var(--sans)">${ln}</text>`});
+    s+=`</g>`;
+  });
+  s+=`<circle id="token" r="7" fill="var(--ok)" opacity="0"/>`;
+  FSVG.innerHTML=`<defs><marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--line)"/></marker></defs>`+s;
+}
+function byId(id){return flowNodes.find(n=>n.id===id)}
+function flog(msg,cls){const l=document.getElementById('flowLog');const d=document.createElement('div');d.innerHTML=cls?`<span class="${cls}">${msg}</span>`:msg;l.appendChild(d);l.scrollTop=l.scrollHeight;}
+function resetFlow(){buildFlow();document.getElementById('flowLog').innerHTML='';}
+async function pulse(id,color){const g=document.getElementById('n-'+id);if(!g)return;const r=g.querySelector('rect');r.setAttribute('fill',color);await sleep(420);r.setAttribute('fill','var(--panel)');}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+async function playFlow(fail){
+  resetFlow();
+  flog('POST /orders → begin Oracle transaction');
+  await pulse('api','#2a2350'); await pulse('db','#2a2350');
+  flog('order + outbox row committed in ONE transaction','g');
+  await pulse('placed','#123040'); flog('outbox poller → orders.placed.v1','k');
+  await pulse('inv','#123040'); flog('InventoryReserved','k');
+  await pulse('pay','#2a2350');
+  if(fail){
+    flog('PaymentFailed — INSUFFICIENT_FUNDS','b');
+    document.getElementById('e-cancel').setAttribute('opacity','1');
+    document.getElementById('e-release').setAttribute('opacity','1');
+    await pulse('cancel','#3a1520'); flog('compensation: order CANCELLED','b');
+    await pulse('inv','#3a1520'); flog('compensation: inventory reserve RELEASED','b');
+    await pulse('proj','#2a2350'); flog('projection converges: status=CANCELLED','w');
+  }else{
+    flog('PaymentCompleted','g');
+    await pulse('ship','#123040'); flog('ShippingScheduled','k');
+    await pulse('proj','#2a2350'); flog('projection converges: status=SHIPPED','g');
+    flog('✓ read_committed consumers only ever saw fully-committed batches','g');
+  }
+}
+
+/* ---------- offsets sim ---------- */
+const MODES=[
+  {id:'AUTO',label:'AUTO',verdict:'<span class="b">MESSAGE LOST.</span> Offset auto-committed to 51 but records 50–99 never processed. Classic quickstart trap.',lose:true,dedup:false},
+  {id:'SYNC_BEFORE',label:'SYNC_BEFORE',verdict:'<span class="b">MESSAGE LOST.</span> Committed offset before doing the work — crash after commit = the work never happened.',lose:true,dedup:false},
+  {id:'SYNC_AFTER',label:'SYNC_AFTER',verdict:'<span class="g">AT-LEAST-ONCE.</span> Offset committed only after work, so the crashed record replays on restart. Handler must be idempotent.',lose:false,dedup:false},
+  {id:'IDEMPOTENT_AFTER',label:'IDEMPOTENT_AFTER',verdict:'<span class="g">EXACTLY-ONCE EFFECT.</span> Replays happen but the DB unique-key dedup absorbs them. Closest to true EOS side effects.',lose:false,dedup:true},
+];
+let curMode='SYNC_AFTER', offsetState={committed:0,processed:0,crashed:false};
+const mb=document.getElementById('modeBar');
+MODES.forEach(m=>{const b=document.createElement('button');b.textContent=m.label;b.className=m.id===curMode?'active':'';
+  b.onclick=()=>{curMode=m.id;[...mb.children].forEach((x,i)=>x.classList.toggle('active',MODES[i].id===curMode));drawOffset();document.getElementById('offsetVerdict').textContent='Ready — run mode '+m.id;};mb.appendChild(b);});
+function drawOffset(){
+  const s=document.getElementById('offsetSvg');const total=100,W=400,x0=10;
+  let bars='';for(let i=0;i<total;i+=1){const x=x0+(i/total)*W;
+    let col='var(--line)';
+    if(i<offsetState.processed)col='var(--ok)';
+    if(offsetState.crashed && i>=50 && i<offsetState.committed)col=MODES.find(m=>m.id===curMode).lose?'var(--bad)':'var(--warn)';
+    bars+=`<rect x="${x}" y="40" width="${W/total-0.6}" height="30" fill="${col}"/>`;}
+  s.innerHTML=bars+
+    `<text x="10" y="26" fill="var(--muted)" font-size="11" font-family="var(--sans)">mode: ${curMode} — 100 records, crash injected at 50</text>`+
+    `<line x1="${x0+(50/total)*W}" y1="34" x2="${x0+(50/total)*W}" y2="76" stroke="var(--bad)" stroke-width="2"/>`+
+    `<text x="${x0+(50/total)*W-6}" y="92" fill="var(--bad)" font-size="10">crash</text>`+
+    `<text x="10" y="110" fill="var(--muted)" font-size="10" font-family="var(--mono)">green=processed  amber=replayed  red=lost</text>`;
+}
+function olog(m,cls){const l=document.getElementById('offsetLog');const d=document.createElement('div');d.innerHTML=cls?`<span class="${cls}">${m}</span>`:m;l.appendChild(d);l.scrollTop=l.scrollHeight;}
+function runOffset(){
+  const m=MODES.find(x=>x.id===curMode);
+  offsetState={committed:m.lose?51:50,processed:50,crashed:true};
+  document.getElementById('offsetLog').innerHTML='';
+  olog(`[${curMode}] consuming… processed 0..49`);
+  if(m.id==='SYNC_BEFORE')olog('committed offset BEFORE work each record','w');
+  olog('✗ simulated crash at offset 50','b');
+  if(m.lose){olog('committed offset = 51 → records 50..99 skipped forever','b');}
+  else{olog('committed offset stayed at 50 → records 50..99 will replay','g');}
+  drawOffset();
+  document.getElementById('offsetVerdict').innerHTML=m.verdict;
+}
+function restartOffset(){
+  const m=MODES.find(x=>x.id===curMode);
+  if(!offsetState.crashed){olog('run a crash first');return;}
+  if(m.lose){olog('↻ restart: resumes from 51 — the lost records are gone','b');offsetState.processed=51;}
+  else{olog('↻ restart: resumes from 50, replaying 50..99',' ');
+    if(m.dedup)olog('dedup table absorbs any already-applied side effects','g');
+    offsetState.processed=100;offsetState.crashed=false;}
+  drawOffset();
+}
+drawOffset();
+
+/* ---------- dual write vs outbox ---------- */
+function dwlog(id,m,cls){const l=document.getElementById(id);const d=document.createElement('div');d.innerHTML=cls?`<span class="${cls}">${m}</span>`:m;l.appendChild(d);l.scrollTop=l.scrollHeight;}
+function dualWrite(){
+  document.getElementById('dwLog').innerHTML='';
+  const brokerUp=Math.random()>0.5;
+  dwlog('dwLog','1. INSERT order → Oracle commit OK','g');
+  if(brokerUp){dwlog('dwLog','2. kafka.send(OrderPlaced) → ack OK','g');dwlog('dwLog','result: consistent (got lucky)','g');}
+  else{dwlog('dwLog','2. kafka.send(OrderPlaced) → broker blip ✗','b');
+    dwlog('dwLog','order exists in DB, event LOST','b');
+    dwlog('dwLog','downstream never ships this order','b');}
+}
+function outboxWrite(){
+  document.getElementById('obLog').innerHTML='';
+  const brokerUp=Math.random()>0.5;
+  dwlog('obLog','1. ONE txn: INSERT order + INSERT outbox → commit','g');
+  dwlog('obLog','2. poller picks up outbox row (SKIP LOCKED)');
+  if(brokerUp){dwlog('obLog','3. send → ack → mark published_at','g');dwlog('obLog','result: consistent','g');}
+  else{dwlog('obLog','3. send → broker blip ✗ — row NOT marked','w');
+    dwlog('obLog','…500ms later, next poll retries the same row');
+    dwlog('obLog','3b. send → ack → mark published_at','g');
+    dwlog('obLog','result: consistent — event was durably staged','g');}
+}
+
+/* ---------- scaling ---------- */
+const pR=document.getElementById('pRange'),rR=document.getElementById('rRange');
+pR.oninput=rR.oninput=drawScale;
+function drawScale(){
+  const P=+pR.value,R=+rR.value;
+  document.getElementById('pLbl').textContent=P;document.getElementById('rLbl').textContent=R;
+  const s=document.getElementById('scaleSvg');
+  // assign partitions round-robin to replicas
+  const owners=Array.from({length:R},()=>[]);
+  for(let i=0;i<P;i++)owners[i%R].push(i);
+  let g='';const padX=30,boxW=120,gap=(840-R*boxW>0)?(840-R*boxW)/(R+1):8, bw=Math.min(boxW,(840-(R+1)*8)/R);
+  for(let r=0;r<R;r++){
+    const x=padX+ r*(bw+8);
+    const idle=owners[r].length===0;
+    g+=`<rect x="${x}" y="30" width="${bw}" height="54" rx="8" fill="${idle?'#1a1420':'var(--panel)'}" stroke="${idle?'var(--bad)':'var(--accent2)'}" stroke-width="1.5"/>`;
+    g+=`<text x="${x+bw/2}" y="52" fill="var(--ink)" font-size="11" text-anchor="middle">pod ${r}</text>`;
+    g+=`<text x="${x+bw/2}" y="70" fill="${idle?'var(--bad)':'var(--muted)'}" font-size="10" text-anchor="middle">${idle?'IDLE':owners[r].length+' part.'}</text>`;
+    // partitions
+    owners[r].forEach((pi,k)=>{const px=x+6+k*16;g+=`<rect x="${px}" y="100" width="13" height="13" rx="3" fill="var(--accent)"/>`;});
+  }
+  s.innerHTML=g;
+  const v=document.getElementById('scaleVerdict');
+  if(R>P)v.innerHTML=`<span class="b">${R-P} pod(s) sit IDLE.</span> A group can't have more active consumers than partitions (${P}). Scale the topic, not just the pods.`;
+  else if(R===P)v.innerHTML=`<span class="g">Perfect balance.</span> ${P} partitions across ${R} pods — one each, maximum parallelism.`;
+  else v.innerHTML=`<span class="w">Headroom.</span> ${P} partitions across ${R} pods — each owns ${Math.ceil(P/R)}–${Math.floor(P/R)}. You can scale up to ${P} pods.`;
+}
+
+buildFlow();drawScale();
+</script>
+</body>
+</html>

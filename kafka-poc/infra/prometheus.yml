@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+
+  - job_name: spring-boot-apps
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - "host.docker.internal:8101"
+          - "host.docker.internal:8102"
+          - "host.docker.internal:8103"
+          - "host.docker.internal:8104"
+          - "host.docker.internal:8105"
+          - "host.docker.internal:8106"
+          - "host.docker.internal:8107"
+          - "host.docker.internal:8108"
+          - "host.docker.internal:8109"
+          - "host.docker.internal:8110"
+          - "host.docker.internal:8111"
+          - "host.docker.internal:8112"

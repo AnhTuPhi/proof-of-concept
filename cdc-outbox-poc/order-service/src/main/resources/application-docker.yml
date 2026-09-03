@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/cdc
+    username: cdc
+    password: cdc
+
+logging:
+  level:
+    root: INFO
+    com.example.cdc: INFO

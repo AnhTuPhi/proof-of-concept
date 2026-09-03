@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KYC Workflow Console</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ctext y='20' font-size='20'%3E🪪%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">KYC</div>
+        <div>
+          <div class="brand-title">Workflow Console</div>
+          <div class="brand-sub">Multi-step async · State machine · DLQ</div>
+        </div>
+      </div>
+      <div class="health" id="health">
+        <span class="dot dot-ok"></span> Connected · <span id="poll-rate">2s polling</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ============ STAT CARDS ============ -->
+    <section class="stats-grid" id="stats-grid">
+      <div class="stat-card"><div class="stat-label">Total cases</div><div class="stat-value" id="stat-total">—</div></div>
+      <div class="stat-card stat-good"><div class="stat-label">Approved</div><div class="stat-value" id="stat-approved">—</div></div>
+      <div class="stat-card stat-bad"><div class="stat-label">Rejected</div><div class="stat-value" id="stat-rejected">—</div></div>
+      <div class="stat-card stat-warn"><div class="stat-label">Manual review</div><div class="stat-value" id="stat-pending">—</div></div>
+      <div class="stat-card stat-info"><div class="stat-label">In progress</div><div class="stat-value" id="stat-inprogress">—</div></div>
+      <div class="stat-card stat-dlq"><div class="stat-label">Dead letter</div><div class="stat-value" id="stat-dlq">—</div></div>
+    </section>
+
+    <!-- ============ TABS ============ -->
+    <nav class="tabs" role="tablist">
+      <button class="tab tab-active" data-tab="customer" role="tab">Customer</button>
+      <button class="tab" data-tab="cases" role="tab">All Cases</button>
+      <button class="tab" data-tab="review" role="tab">Review Queue <span class="badge" id="badge-review">0</span></button>
+      <button class="tab" data-tab="dlq" role="tab">DLQ <span class="badge badge-dlq" id="badge-dlq">0</span></button>
+      <button class="tab" data-tab="diagram" role="tab">State Machine</button>
+    </nav>
+
+    <!-- ============ CUSTOMER TAB ============ -->
+    <section class="panel" id="tab-customer">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-h">
+            <h3>1. Register new applicant</h3>
+            <p class="muted">Creates a KYC case in <code>REGISTERED</code> state.</p>
+          </div>
+          <form id="form-register">
+            <label>Full name</label>
+            <input name="fullName" required value="Nguyen Van A" />
+            <label>Email</label>
+            <input name="email" type="email" required value="nguyen.a@example.com" />
+            <label>Declared address</label>
+            <input name="declaredAddress" required value="123 Tran Hung Dao, Hanoi" />
+            <button type="submit" class="btn btn-primary">Register applicant</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <h3>2. Upload ID document</h3>
+            <p class="muted">Triggers the async OCR + address-verification pipeline.</p>
+          </div>
+          <form id="form-upload">
+            <label>Case ID</label>
+            <input name="caseId" id="upload-case-id" placeholder="kyc_..." required />
+            <label>File name</label>
+            <input name="fileName" required value="id_card_front.jpg" />
+            <label>Size (bytes)</label>
+            <input name="sizeBytes" type="number" required value="248320" />
+            <button type="submit" class="btn btn-primary">Upload &amp; start workflow</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card" id="last-case-card" style="display:none">
+        <div class="card-h">
+          <h3>Last action</h3>
+        </div>
+        <pre id="last-case-json" class="json-block"></pre>
+      </div>
+    </section>
+
+    <!-- ============ ALL CASES TAB ============ -->
+    <section class="panel hidden" id="tab-cases">
+      <div class="card">
+        <div class="card-h flex-between">
+          <h3>All cases <span class="muted" id="cases-count"></span></h3>
+          <div class="filters">
+            <label class="filter-label"><input type="checkbox" id="filter-active" checked /> Active only</label>
+          </div>
+        </div>
+        <div id="cases-list" class="case-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ REVIEW QUEUE TAB ============ -->
+    <section class="panel hidden" id="tab-review">
+      <div class="card">
+        <div class="card-h">
+          <h3>Manual review queue</h3>
+          <p class="muted">Cases that have passed OCR + address verification and need a reviewer decision.</p>
+        </div>
+        <div id="review-list" class="case-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ DLQ TAB ============ -->
+    <section class="panel hidden" id="tab-dlq">
+      <div class="card">
+        <div class="card-h">
+          <h3>Dead letter queue</h3>
+          <p class="muted">Cases where a step exhausted all retries. Inspect and replay manually.</p>
+        </div>
+        <div id="dlq-list" class="case-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ DIAGRAM TAB ============ -->
+    <section class="panel hidden" id="tab-diagram">
+      <div class="card">
+        <div class="card-h">
+          <h3>State machine</h3>
+          <p class="muted">Allowed transitions between KYC states. Anything not drawn is rejected by the state machine.</p>
+        </div>
+        <div class="diagram-wrap">
+          <svg viewBox="0 0 1100 640" id="state-diagram" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch legend-active"></span> Active state</span>
+          <span class="legend-item"><span class="legend-swatch legend-fail"></span> Failure</span>
+          <span class="legend-item"><span class="legend-swatch legend-terminal"></span> Terminal</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ CASE DETAIL MODAL ============ -->
+  <div class="modal-backdrop hidden" id="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header class="modal-h">
+        <h3 id="modal-title">Case</h3>
+        <button class="icon-btn" id="modal-close">✕</button>
+      </header>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- ============ TOAST ============ -->
+  <div id="toast-host"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

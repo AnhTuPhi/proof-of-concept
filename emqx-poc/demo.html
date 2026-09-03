@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EMQX Production Patterns — POC Explorer</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121924; --panel2:#0e141d; --ink:#e6edf3; --muted:#8b98a9;
+    --line:#1e2a3a; --accent:#35d0ba; --accent2:#4b9fff; --warn:#ff6b6b; --ok:#4ade80;
+    --chip:#17212e; --shadow:0 8px 30px rgba(0,0,0,.35);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132033 0,var(--bg) 55%);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1120px;margin:0 auto;padding:32px 20px 80px}
+  header.hero{padding:26px 0 8px}
+  .kicker{color:var(--accent);font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase}
+  h1{font-size:34px;margin:8px 0 6px;letter-spacing:-.02em}
+  h2{font-size:22px;margin:38px 0 14px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  h2 .num{font-family:var(--mono);font-size:13px;color:var(--accent);border:1px solid var(--line);border-radius:8px;padding:2px 8px}
+  p.lede{color:var(--muted);max-width:760px;font-size:16px}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 6px}
+  .tag{font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+  nav.toc{position:sticky;top:0;z-index:5;background:rgba(11,15,20,.82);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);margin:22px -20px 0;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap}
+  nav.toc a{font-size:13px;color:var(--muted);padding:4px 9px;border-radius:7px}
+  nav.toc a:hover{color:var(--ink);background:var(--chip);text-decoration:none}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+
+  /* Architecture diagram */
+  .arch{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:14px;align-items:stretch}
+  .node{background:var(--chip);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .node h4{margin:0 0 6px;font-size:14px}
+  .node small{color:var(--muted);font-family:var(--mono);font-size:11.5px;display:block}
+  .flowlbl{color:var(--accent);font-family:var(--mono);font-size:11px;text-align:center;margin:6px 0}
+  .stack{display:flex;flex-direction:column;gap:10px}
+  @media(max-width:820px){.arch{grid-template-columns:1fr}}
+
+  /* POC grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .card{background:var(--chip);border:1px solid var(--line);border-radius:13px;padding:14px;cursor:pointer;transition:.15s transform,.15s border-color;position:relative}
+  .card:hover{transform:translateY(-3px);border-color:var(--accent)}
+  .card .pn{font-family:var(--mono);font-size:12px;color:var(--accent)}
+  .card h4{margin:4px 0 6px;font-size:15px}
+  .card .breaks{color:var(--warn);font-size:12.5px;margin:0}
+  .card .fix{color:var(--muted);font-size:12.5px;margin:7px 0 0}
+  .port{position:absolute;top:12px;right:12px;font-family:var(--mono);font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+
+  /* Storm simulator */
+  .sim{display:grid;grid-template-columns:1.4fr .9fr;gap:18px}
+  @media(max-width:820px){.sim{grid-template-columns:1fr}}
+  canvas{width:100%;height:280px;background:#080c11;border:1px solid var(--line);border-radius:12px;display:block}
+  .controls{display:flex;flex-direction:column;gap:12px}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+  .seg button.active{color:#08121a;background:var(--accent);border-color:var(--accent);font-weight:600}
+  .bigbtn{font-size:14px;font-weight:600;color:#08121a;background:linear-gradient(90deg,var(--warn),#ff9a5a);border:0;border-radius:10px;padding:11px 14px;cursor:pointer}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .metric{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .metric .v{font-family:var(--mono);font-size:20px}
+  .metric .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .metric.bad .v{color:var(--warn)} .metric.good .v{color:var(--ok)}
+  .legend{display:flex;gap:14px;color:var(--muted);font-size:12px;margin-top:8px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+
+  table.tech{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.tech th,table.tech td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  table.tech th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  table.tech td code{font-family:var(--mono);font-size:12.5px;color:var(--accent)}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:820px){.cols{grid-template-columns:1fr}}
+  .note{background:var(--chip);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:12px 14px;font-size:13.5px;color:var(--muted)}
+  .note b{color:var(--ink)}
+  footer{margin-top:44px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+  .modal-bg{position:fixed;inset:0;background:rgba(4,7,11,.72);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .modal-bg.show{display:flex}
+  .modal{max-width:560px;width:100%;background:var(--panel);border:1px solid var(--accent);border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+  .modal .pn{font-family:var(--mono);color:var(--accent);font-size:12px}
+  .modal h3{margin:6px 0 10px}
+  .modal p{font-size:14px}
+  .modal .close{float:right;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">EMQX 5 · Spring Boot 3.4 · Java 21 · MQTT 5</div>
+    <h1>Production Patterns — POC Explorer</h1>
+    <p class="lede">Fourteen runnable proofs of the ways MQTT breaks at fleet scale. Each isolates
+    <b>one</b> failure mode, ships the fix, and names the trade-off. This page explains the
+    architecture flow, the key tech by responsibility, and lets you <b>watch a connection storm</b>
+    collapse a broker — then fix it with jitter.</p>
+    <div class="tags">
+      <span class="tag">100k+ conns / JVM</span>
+      <span class="tag">3-node Mria cluster</span>
+      <span class="tag">JWT + mTLS</span>
+      <span class="tag">Rule engine → Kafka</span>
+      <span class="tag">Sparkplug B</span>
+      <span class="tag">Chunked OTA</span>
+      <span class="tag">Split-brain</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#flow">Architecture flow</a>
+    <a href="#storm">Live: connection storm</a>
+    <a href="#pocs">The 14 POCs</a>
+    <a href="#tech">Key tech by responsibility</a>
+    <a href="#docs">Docs</a>
+  </nav>
+
+  <!-- ARCHITECTURE FLOW -->
+  <h2 id="flow"><span class="num">FLOW</span> How a message travels</h2>
+  <p class="lede">Devices connect through a sticky load balancer to a 3-node EMQX cluster. The
+  broker authenticates, authorizes, routes, and (via its rule engine) sinks telemetry to Kafka and
+  Postgres — no middle microservice.</p>
+  <div class="panel">
+    <div class="arch">
+      <div class="stack">
+        <div class="node"><h4>Devices / Fleet apps</h4><small>MQTT 5 · Paho / HiveMQ</small><small>clientId = stable id</small></div>
+        <div class="node"><h4>HAProxy</h4><small>balance source (sticky)</small><small>:1880 mqtt · 4h TCP timeout</small></div>
+      </div>
+      <div class="stack">
+        <div class="flowlbl">▼ CONNECT · auth chain (JWT → Postgres) ▼</div>
+        <div class="node" style="border-color:var(--accent)">
+          <h4>EMQX 5 cluster · 3 cores</h4>
+          <small>Mria + RLOG routing table</small>
+          <small>sessions · retained · ACL cache</small>
+          <small>rule engine (SQL) inside broker</small>
+        </div>
+        <div class="flowlbl">▼ PUBLISH → rule SELECT ▼</div>
+        <div class="node"><h4>Rule engine actions</h4><small>to_kafka · to_pg</small></div>
+      </div>
+      <div class="stack">
+        <div class="node"><h4>Postgres 16</h4><small>auth · ACL · device shadow</small><small>telemetry · audit</small></div>
+        <div class="node"><h4>Kafka 3.9</h4><small>durable replay downstream</small></div>
+        <div class="node"><h4>Prometheus → Grafana</h4><small>emqx_message_dropped = smoke alarm</small></div>
+      </div>
+    </div>
+    <div class="note" style="margin-top:16px"><b>Why sticky LB:</b> an MQTT 5 <code>cleanStart=false</code>
+    client that reconnects to a <i>different</i> node has to fetch its session cross-cluster (slow) or
+    silently starts fresh (lost queued messages). <code>balance source</code> keeps a client on its node.</div>
+  </div>
+
+  <!-- STORM SIMULATOR -->
+  <h2 id="storm"><span class="num">POC 02</span> Live: the connection storm (thundering herd)</h2>
+  <p class="lede">A broker restart drops every client at once. If they all reconnect with the same
+  timing, the surviving broker collapses under the wave. Pick a reconnect strategy, hit
+  <b>Restart broker</b>, and watch the accept-rate. <b>Decorrelated jitter</b> spreads the herd;
+  the others don't.</p>
+  <div class="panel">
+    <div class="sim">
+      <div>
+        <canvas id="cv" width="720" height="280"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--accent2)"></span>reconnect attempts/tick</span>
+          <span><span class="dot" style="background:var(--ok)"></span>accepted</span>
+          <span><span class="dot" style="background:var(--warn)"></span>rejected (over broker capacity)</span>
+        </div>
+      </div>
+      <div class="controls">
+        <div>
+          <div class="l" style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Reconnect strategy</div>
+          <div class="seg" id="strat">
+            <button data-s="IMMEDIATE">Immediate</button>
+            <button data-s="FIXED_1S">Fixed 1s</button>
+            <button data-s="EXP_NO_JITTER">Exp (no jitter)</button>
+            <button data-s="FULL_JITTER">Full jitter</button>
+            <button data-s="DECORRELATED" class="active">Decorrelated ★</button>
+          </div>
+        </div>
+        <button class="bigbtn" id="restart">⚡ Restart broker — 10,000 clients drop</button>
+        <div class="metrics">
+          <div class="metric bad"><div class="v" id="mPeak">0</div><div class="l">Peak attempts / tick</div></div>
+          <div class="metric bad"><div class="v" id="mRej">0</div><div class="l">Total rejected</div></div>
+          <div class="metric good"><div class="v" id="mReady">0</div><div class="l">Reconnected</div></div>
+          <div class="metric"><div class="v" id="mTick">0</div><div class="l">Ticks to recover</div></div>
+        </div>
+        <div class="note" id="verdict"><b>Decorrelated jitter:</b> each client carries its own random
+        state forward (<code>sleep = rand(base, prev×3)</code>), so within ~3 cycles the fleet is
+        uniform across the window. Broker survives.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- POC GRID -->
+  <h2 id="pocs"><span class="num">14</span> The POCs — click any card</h2>
+  <p class="lede">Each card: what breaks in prod (red) and what the POC shows (grey). Click for the
+  fix and the trade-off.</p>
+  <div class="grid" id="pocGrid"></div>
+
+  <!-- KEY TECH -->
+  <h2 id="tech"><span class="num">TECH</span> Key technology by responsibility</h2>
+  <div class="panel">
+    <table class="tech">
+      <thead><tr><th>Responsibility</th><th>Technology</th><th>Why this one</th></tr></thead>
+      <tbody id="techBody"></tbody>
+    </table>
+  </div>
+
+  <!-- DOCS -->
+  <h2 id="docs"><span class="num">DOCS</span> Read next</h2>
+  <div class="cols">
+    <div class="note"><b><a href="ISSUE.md">ISSUE.md</a></b> — what problem the whole repo solves; the
+    14 failure modes and who hits them.</div>
+    <div class="note"><b><a href="TECHNICAL.md">TECHNICAL.md</a></b> — per-POC: hard problem, what
+    we protect, solution shape, key tech, sub-problem breakdown, tech debt.</div>
+    <div class="note"><b><a href="CONSISTENCY.md">CONSISTENCY.md</a></b> — scaling on k8s pods / VMs:
+    clientId collisions, shared-sub fan-out, sticky routing, rolling-deploy sequencing.</div>
+    <div class="note"><b><a href="README.md">README.md</a></b> — TL;DR, run instructions, gotchas
+    cheat sheet, production hygiene notes.</div>
+  </div>
+
+  <footer>
+    Static explainer — no backend. The storm chart is a client-side model of the accept-rate dynamics,
+    not live broker data; run the real POC with <code>mvn -pl 02-connection-storm spring-boot:run</code>
+    and watch Grafana. POC code Apache-2.0.
+  </footer>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal">
+    <span class="close" onclick="document.getElementById('modalBg').classList.remove('show')">×</span>
+    <div class="pn" id="mPn"></div>
+    <h3 id="mTitle"></h3>
+    <p id="mBreaks"></p>
+    <p id="mFix"></p>
+    <p id="mTrade"></p>
+  </div>
+</div>
+
+<script>
+// ---------- POC data ----------
+const POCS = [
+  {n:"01",port:"8101",t:"Million Connections",b:"Linux fd limits, ephemeral ports, one hot Erlang scheduler cap a JVM far below a million.",f:"Ramp 100k+ clients/JVM on HiveMQ's shared Netty loop, paced; tune ulimit, ports, backlog, +sbt db.",tr:"Trade-off: the Java fleet app isn't what you ship — emqtt-bench is; this exercises your Java code paths at scale."},
+  {n:"02",port:"8102",t:"Connection Storm",b:"A broker restart makes every client reconnect in sync → the surviving broker dies under the wave.",f:"Decorrelated jitter (rand(base, prev×3)) + broker max_conn_rate. Exponential-without-jitter still synchronizes.",tr:"Trade-off: covers connection storms; subscription storms need the same jitter but stress the topic tree."},
+  {n:"03",port:"8103",t:"QoS Levels",b:"Teams pick QoS 2 'to be safe' and throughput collapses ~10× with per-inflight broker memory.",f:"Side-by-side benchmark: QoS0 ≫ QoS1 ≫ QoS2. Default to QoS 1 + idempotent processing.",tr:"Trade-off: absolute numbers are laptop figures; only the ratio is portable."},
+  {n:"04",port:"8104",t:"Shared Subscriptions",b:"Plain subs fan out to every consumer; you can't scale backend workers behind the broker.",f:"$share/group/topic → exactly one consumer per message; free rebalance, no coordination.",tr:"Trade-off: no replay — if the whole group is down, messages drop. Put Kafka downstream."},
+  {n:"05",port:"8105",t:"Auth: JWT + mTLS",b:"Shared-secret password auth: no per-device identity, cross-tenant leaks by default.",f:"Ordered chain JWT→Postgres, mTLS cert-CN identity, default-deny ACL on tenant/{id}/... convention.",tr:"Trade-off: demo CA key is in-process; production needs HSM/KMS + TLS 1.3 only."},
+  {n:"06",port:"8106",t:"Rule Engine + Kafka",b:"An extra microservice just to move MQTT→Kafka/DB: more to run, scale, monitor; adds latency.",f:"Mgmt-API-provisioned rule sinks telemetry to Kafka + Postgres inside the broker (~1 core vs ~4).",tr:"Trade-off: keep rule SQL thin (routing only); real business logic belongs in the Kafka consumer."},
+  {n:"07",port:"8107",t:"MQTT 5 Features",b:"On 3.1.1 every failure looks identical on the wire; long topics repeat on every packet.",f:"Reason codes, user properties, topic alias (200B→6B), native request/response.",tr:"Trade-off: v3 clients still connect — they just don't see the v5 features."},
+  {n:"08",port:"8108",t:"LWT + Presence",b:"Backend thinks dead devices are alive for 45+s; cellular flap causes false 'offline'.",f:"Retained Will + MQTT 5 will-delay-interval suppresses false offline; retained presence for late joiners.",tr:"Trade-off: retained presence is a retained population — subject to POC 10's TTL discipline."},
+  {n:"09",port:"8109",t:"Session Persistence",b:"cleanSession=false + random clientId leaks one session per boot, kept forever → broker OOM.",f:"All 4 cleanStart×expiry cases; MQTT 5 mandatory session-expiry; sessionPresent as the smoke alarm.",tr:"Trade-off: QoS 0 is never queued even with a persistent session — use QoS 1 for offline delivery."},
+  {n:"10",port:"8110",t:"Retained Messages",b:"No default TTL in 3.1.1: 50M unique topics kept forever → broker swaps and dies.",f:"MQTT 5 per-message messageExpiryInterval + broker-wide retainer TTL; zero-byte to delete.",tr:"Trade-off: the mechanism is shown; choosing the right TTL is domain-specific."},
+  {n:"11",port:"8111",t:"Device Shadow",b:"Broker is fire-and-forget: 'turn off' sent while offline dies, even at QoS 1 if the session expired.",f:"reported/desired/delta in Postgres JSONB; retained delta so a device joining later still converges.",tr:"Trade-off: shallow JSONB merge; deep nested desired-state needs a richer diff."},
+  {n:"12",port:"8112",t:"Sparkplug B",b:"DIY JSON payloads with no liveness signal; every SCADA team reinvents the format incompatibly.",f:"Eclipse spec NBIRTH/NDATA/NDEATH, protobuf, bdSeq pairing, LWT-as-NDEATH liveness.",tr:"Trade-off: hand-rolled to teach the spec — use Eclipse Tahu in production (proto is EPL-2.0)."},
+  {n:"13",port:"8113",t:"OTA Updates",b:"Pushing 1MB to 1M devices at once = 1TB of broker bytes + backpressure death.",f:"Chunked pull, per-device pacing, SHA-256 verify, resumable bitmap, retained offer with TTL.",tr:"Trade-off: with spare bandwidth + reliable HTTPS, trigger over MQTT but fetch over HTTPS/S3."},
+  {n:"14",port:"8114",t:"Cluster + Split-brain",b:"'The cluster is up but messages aren't routing' — two halves each think they're the cluster.",f:"Per-node probe (bypass LB) + Mgmt-API membership; odd cluster size; autoheal on partition.",tr:"Trade-off: core-only cluster for the cleanest split story; add a replicant tier to scale connections."},
+];
+const TECH = [
+  ["Broker","EMQX 5.8 · 3 cores","Erlang/OTP holds millions of conns; Mria+RLOG cluster; rule engine built in"],
+  ["Scale client (01,02)","HiveMQ MQTT 1.3","Shared Netty event loop → 100k+ conns per JVM"],
+  ["Single client (rest)","Eclipse Paho v5 1.2.5","Thread-per-client; trivial for request/reply"],
+  ["App framework","Spring Boot 3.4 / Java 21","REST surface per POC, DI, virtual-thread friendly"],
+  ["Load balancer","HAProxy 2.9 (balance source)","Sticky sessions so cleanStart=false lands on same node"],
+  ["Stateful store","Postgres 16","Auth/ACL, shadow JSONB, telemetry sink, audit"],
+  ["Stream sink","Kafka 3.9","Durable replay downstream of fire-and-forget broker"],
+  ["Observability","Prometheus + Grafana","emqx_message_dropped is the primary smoke alarm"],
+  ["Backoff","Resilience4j + JitteredBackoff","Decorrelated jitter (AWS recipe)"],
+  ["mTLS CA","BouncyCastle 1.78","In-memory X.509 device certs for the demo"],
+  ["Industrial payloads","Protobuf 3.25","Sparkplug B wire format"],
+];
+
+// render POC cards
+const grid = document.getElementById('pocGrid');
+POCS.forEach(p=>{
+  const d=document.createElement('div'); d.className='card';
+  d.innerHTML=`<span class="port">:${p.port}</span><div class="pn">POC ${p.n}</div>
+    <h4>${p.t}</h4><p class="breaks">✗ ${p.b}</p><p class="fix">✓ ${p.f}</p>`;
+  d.onclick=()=>{
+    mPn.textContent=`POC ${p.n} · port ${p.port}`; mTitle.textContent=p.t;
+    mBreaks.innerHTML=`<b style="color:var(--warn)">What breaks:</b> ${p.b}`;
+    mFix.innerHTML=`<b style="color:var(--ok)">The fix:</b> ${p.f}`;
+    mTrade.innerHTML=`<span style="color:var(--muted)">${p.tr}</span>`;
+    modalBg.classList.add('show');
+  };
+  grid.appendChild(d);
+});
+// render tech table
+const tb=document.getElementById('techBody');
+TECH.forEach(([r,t,w])=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${r}</td><td><code>${t}</code></td><td style="color:var(--muted)">${w}</td>`;tb.appendChild(tr);});
+
+// ---------- Storm simulator ----------
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const DPR=Math.min(2,window.devicePixelRatio||1);
+function fit(){cv.width=cv.clientWidth*DPR;cv.height=280*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+fit(); window.addEventListener('resize',fit);
+
+const N=10000;               // fleet size
+const CAP=650;               // broker accepts per tick (accept-queue capacity)
+let strat="DECORRELATED";
+let clients=[];              // {due, prev}
+let history=[];              // {att, acc, rej}
+let running=false, tick=0, peak=0, totalRej=0, ready=0, recoverTick=0;
+
+const STRAT_TEXT={
+  IMMEDIATE:`<b>Immediate:</b> every client retries every tick. The herd never disperses — the broker rejects most attempts forever. Classic self-inflicted DoS.`,
+  FIXED_1S:`<b>Fixed 1s:</b> everyone waits the same 1s then hits together. One giant synchronized spike each second. Still fatal.`,
+  EXP_NO_JITTER:`<b>Exponential, no jitter:</b> everyone doubles from the same base (1,2,4,8s) → identical delays → periodic spikes at every doubling. The textbook answer, still wrong.`,
+  FULL_JITTER:`<b>Full jitter:</b> sleep = rand(0, cap). Acceptable — spreads the herd, but the distribution is lumpy and a bit wasteful early.`,
+  DECORRELATED:`<b>Decorrelated jitter:</b> each client carries its own random state forward (<code>sleep = rand(base, prev×3)</code>), so within ~3 cycles the fleet is uniform. Broker survives.`
+};
+document.getElementById('strat').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  [...e.currentTarget.children].forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); strat=b.dataset.s;
+  document.getElementById('verdict').innerHTML=STRAT_TEXT[strat];
+});
+
+function schedule(prev){
+  // returns ticks-until-next-attempt for one client, given its previous backoff (ticks). 1 tick ≈ 100ms
+  const base=1, cap=80;
+  switch(strat){
+    case "IMMEDIATE": return 1;
+    case "FIXED_1S": return 10;
+    case "EXP_NO_JITTER": {const nx=Math.min(cap,(prev||base)*2); return nx;}
+    case "FULL_JITTER": {const c=Math.min(cap,(prev||base)*2); return 1+Math.floor(Math.random()*c);}
+    case "DECORRELATED": default: {const nx=Math.min(cap, base+Math.floor(Math.random()*((prev||base)*3))); return Math.max(1,nx);}
+  }
+}
+function restart(){
+  clients=[]; for(let i=0;i<N;i++){clients.push({due:1,prev:1});} // all drop, first attempt next tick
+  history=[]; running=true; tick=0; peak=0; totalRej=0; ready=0; recoverTick=0;
+}
+document.getElementById('restart').onclick=restart;
+
+function step(){
+  if(!running) return;
+  tick++;
+  let attempts=[];
+  for(const c of clients){ c.due--; if(c.due<=0) attempts.push(c); }
+  let acc=0,rej=0;
+  // broker accepts up to CAP this tick; rest rejected and must reschedule
+  for(let i=0;i<attempts.length;i++){
+    const c=attempts[i];
+    if(acc<CAP){ acc++; c.done=true; }
+    else{ rej++; const s=schedule(c.prev); c.prev=Math.min(80,(c.prev||1)*2); c.due=s; }
+  }
+  clients=clients.filter(c=>!c.done);
+  ready=N-clients.length;
+  const att=attempts.length;
+  peak=Math.max(peak,att); totalRej+=rej;
+  history.push({att,acc,rej}); if(history.length>140) history.shift();
+  if(clients.length===0 && recoverTick===0){ recoverTick=tick; running=false; }
+  // metrics
+  document.getElementById('mPeak').textContent=peak.toLocaleString();
+  document.getElementById('mRej').textContent=totalRej.toLocaleString();
+  document.getElementById('mReady').textContent=ready.toLocaleString();
+  document.getElementById('mTick').textContent=(recoverTick||tick);
+  draw();
+}
+function draw(){
+  const W=cv.clientWidth,H=280,pad=8;
+  ctx.clearRect(0,0,W,H);
+  // capacity line
+  const maxY=Math.max(CAP*1.6, ...history.map(h=>h.att),1);
+  const yOf=v=>H-pad-(v/maxY)*(H-2*pad);
+  ctx.strokeStyle="#33507a";ctx.setLineDash([5,5]);ctx.beginPath();
+  ctx.moveTo(0,yOf(CAP));ctx.lineTo(W,yOf(CAP));ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle="#5b7bb0";ctx.font="11px ui-monospace,monospace";ctx.fillText("broker capacity",6,yOf(CAP)-5);
+  const bw=Math.max(2,(W-2*pad)/140);
+  history.forEach((h,i)=>{
+    const x=pad+i*bw;
+    // attempts (blue) behind
+    ctx.fillStyle="rgba(75,159,255,.55)";ctx.fillRect(x,yOf(h.att),bw-0.6,H-pad-yOf(h.att));
+    // accepted (green)
+    ctx.fillStyle="rgba(74,222,128,.9)";ctx.fillRect(x,yOf(h.acc),bw-0.6,H-pad-yOf(h.acc));
+    // rejected (red) stacked on accepted
+    if(h.rej>0){ctx.fillStyle="rgba(255,107,107,.9)";ctx.fillRect(x,yOf(h.acc+h.rej),bw-0.6,yOf(h.acc)-yOf(h.acc+h.rej));}
+  });
+  if(!running && recoverTick){
+    ctx.fillStyle="#4ade80";ctx.font="13px -apple-system,sans-serif";
+    ctx.fillText("✓ fleet reconnected in "+recoverTick+" ticks",pad+6,20);
+  } else if(running){
+    ctx.fillStyle="#ff6b6b";ctx.font="13px -apple-system,sans-serif";
+    ctx.fillText("storm in progress — "+clients.length.toLocaleString()+" clients still reconnecting",pad+6,20);
+  } else {
+    ctx.fillStyle="#8b98a9";ctx.font="13px -apple-system,sans-serif";
+    ctx.fillText("pick a strategy, then hit ⚡ Restart broker",pad+6,20);
+  }
+}
+draw();
+setInterval(step,60);
+</script>
+</body>
+</html>

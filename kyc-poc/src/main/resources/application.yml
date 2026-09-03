@@ -1,0 +1,39 @@
+server:
+  port: 8080
+  compression:
+    enabled: true
+
+spring:
+  application:
+    name: kyc-workflow-poc
+  jackson:
+    serialization:
+      indent-output: true
+      write-dates-as-timestamps: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+kyc:
+  ocr:
+    min-delay-ms: 1500
+    max-delay-ms: 4000
+    failure-rate: 0.20
+    max-retries: 3
+  address:
+    min-delay-ms: 2000
+    max-delay-ms: 5000
+    failure-rate: 0.15
+    max-retries: 3
+  manual-review:
+    auto-approve-threshold: 0.85
+    auto-reject-threshold: 0.30
+
+logging:
+  level:
+    com.poc.kyc: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

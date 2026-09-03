@@ -1,0 +1,27 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: dunning-poc
+  datasource:
+    url: jdbc:h2:mem:dunning;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  h2:
+    console:
+      enabled: true
+      path: /h2
+
+dunning:
+  # Smart retry schedule (days from initial failure). Stripe-like cadence.
+  retry-offsets-days: [3, 5, 7]
+  # Days after last retry failure before service is suspended.
+  grace-period-days: 2
+  # Days after suspension before subscription is canceled.
+  suspension-window-days: 14

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usage Billing — Subscription Billing</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect width='28' height='28' rx='6' fill='%234338ca'/%3E%3Ctext x='14' y='20' text-anchor='middle' font-family='Arial' font-weight='700' font-size='16' fill='white'%3E%24%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">$</span>
+      Subscription Billing
+    </div>
+    <nav class="app-nav">
+      <a href="http://localhost:8081/">Proration</a>
+      <a href="http://localhost:8082/">Dunning</a>
+      <a href="/" class="active">Usage</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="meta"></div>
+  </header>
+
+  <main class="app-main">
+    <h1 class="page-title">Usage-Based Billing</h1>
+    <p class="page-subtitle">
+      Idempotent ingestion → daily rollups → tiered pricing → invoice → reconciliation.
+      Replays of the same <span class="kbd">eventId</span> are silently dropped.
+    </p>
+
+    <div class="grid cols-2">
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Pricing Tiers</h2>
+          <button class="btn btn-ghost btn-sm" onclick="loadTiers()">Refresh</button>
+        </div>
+        <div id="tiers-area">
+          <div class="empty-state"><span class="spinner"></span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Ingest Single Event</h2>
+        </div>
+        <form onsubmit="return ingestOne(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="ev-id">Event ID</label>
+              <input id="ev-id" type="text" placeholder="auto" />
+              <p class="hint">Leave blank for auto-uuid; duplicate IDs are deduped.</p>
+            </div>
+            <div class="form-row">
+              <label for="ev-customer">Customer</label>
+              <input id="ev-customer" type="text" required placeholder="cust-X" />
+            </div>
+            <div class="form-row">
+              <label for="ev-metric">Metric</label>
+              <select id="ev-metric">
+                <option>API_CALLS</option>
+                <option>STORAGE_GB_HOURS</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="ev-qty">Quantity</label>
+              <input id="ev-qty" type="number" min="0" step="0.0001" required value="1" />
+            </div>
+            <div class="form-row" style="grid-column: span 2">
+              <label for="ev-when">Occurred At (UTC)</label>
+              <input id="ev-when" type="datetime-local" required />
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary mt-3" style="width:100%">Ingest Event</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="grid cols-2">
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Bulk Ingest</h2>
+          <p class="card-subtitle">Simulate a busy customer.</p>
+        </div>
+        <form onsubmit="return bulkIngest(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="bk-customer">Customer</label>
+              <input id="bk-customer" type="text" required value="cust-demo" />
+            </div>
+            <div class="form-row">
+              <label for="bk-metric">Metric</label>
+              <select id="bk-metric">
+                <option>API_CALLS</option>
+                <option>STORAGE_GB_HOURS</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="bk-total">Total Units</label>
+              <input id="bk-total" type="number" min="1" required value="1400000" />
+            </div>
+            <div class="form-row">
+              <label for="bk-day">Day (UTC)</label>
+              <input id="bk-day" type="date" required />
+            </div>
+            <div class="form-row">
+              <label for="bk-chunks">Chunks</label>
+              <input id="bk-chunks" type="number" min="1" max="500" required value="14" />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn-primary" id="bk-submit" style="width:100%">Run Bulk Ingest</button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Run Rollup</h2>
+          <p class="card-subtitle">Re-rolls per-customer/metric totals for a single day.</p>
+        </div>
+        <form onsubmit="return runRollup(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="ru-customer">Customer</label>
+              <input id="ru-customer" type="text" required />
+            </div>
+            <div class="form-row">
+              <label for="ru-day">Day</label>
+              <input id="ru-day" type="date" required />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn-primary" style="width:100%">Roll Up</button>
+            </div>
+          </div>
+        </form>
+        <div id="rollup-result" class="mt-3"></div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Recent Events</h2>
+          <p class="card-subtitle">Most recent 50, newest first.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadRecent()">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Event ID</th>
+              <th>Customer</th>
+              <th>Metric</th>
+              <th class="num">Quantity</th>
+              <th>Occurred At</th>
+              <th>Usage Day</th>
+            </tr>
+          </thead>
+          <tbody id="events-body">
+            <tr class="loading-row"><td colspan="6"><span class="spinner"></span> Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="grid cols-2">
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Generate Invoice</h2>
+        </div>
+        <form onsubmit="return generateInvoice(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="iv-customer">Customer</label>
+              <input id="iv-customer" type="text" required />
+            </div>
+            <div class="form-row">
+              <label for="iv-start">Period Start</label>
+              <input id="iv-start" type="date" required />
+            </div>
+            <div class="form-row">
+              <label for="iv-end">Period End</label>
+              <input id="iv-end" type="date" required />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn-primary" style="width:100%">Generate</button>
+            </div>
+          </div>
+        </form>
+        <div id="invoice-area" class="mt-3"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Reconciliation</h2>
+          <p class="card-subtitle">Raw event sum vs daily rollup sum — flags drift.</p>
+        </div>
+        <form onsubmit="return runReconcile(event)">
+          <div class="form-grid">
+            <div class="form-row">
+              <label for="rc-customer">Customer</label>
+              <input id="rc-customer" type="text" required />
+            </div>
+            <div class="form-row">
+              <label for="rc-start">Period Start</label>
+              <input id="rc-start" type="date" required />
+            </div>
+            <div class="form-row">
+              <label for="rc-end">Period End</label>
+              <input id="rc-end" type="date" required />
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn-primary" style="width:100%">Reconcile</button>
+            </div>
+          </div>
+        </form>
+        <div id="reconcile-area" class="mt-3"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

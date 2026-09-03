@@ -1,0 +1,45 @@
+{
+  "name": "oracle-orders-source",
+  "config": {
+    "connector.class": "io.debezium.connector.oracle.OracleConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "oracle",
+    "database.port": "1521",
+    "database.user": "debezium",
+    "database.password": "Debezium123",
+    "database.dbname": "FREE",
+    "database.pdb.name": "FREEPDB1",
+    "database.connection.adapter": "logminer",
+
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9094",
+    "schema.history.internal.kafka.topic": "schema-history.orders",
+
+    "topic.prefix": "cdc",
+    "table.include.list": "APPUSER.ORDERS,APPUSER.OUTBOX,APPUSER.PAYMENTS,APPUSER.INVENTORY",
+
+    "snapshot.mode": "initial",
+    "log.mining.strategy": "online_catalog",
+    "log.mining.batch.size.default": "20000",
+    "log.mining.batch.size.max": "100000",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+
+    "transforms": "unwrap,routeOutbox",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "false",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+
+    "transforms.routeOutbox.type": "io.debezium.transforms.outbox.EventRouter",
+    "transforms.routeOutbox.table.field.event.id": "id",
+    "transforms.routeOutbox.table.field.event.key": "aggregate_id",
+    "transforms.routeOutbox.table.field.event.type": "event_type",
+    "transforms.routeOutbox.table.field.event.timestamp": "created_at",
+    "transforms.routeOutbox.route.by.field": "aggregate_type",
+    "transforms.routeOutbox.route.topic.replacement": "${routedByValue}.events.v1",
+    "transforms.routeOutbox.table.fields.additional.placement": "event_type:header:eventType"
+  }
+}

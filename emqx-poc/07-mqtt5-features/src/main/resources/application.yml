@@ -1,0 +1,19 @@
+server:
+  port: 8107
+spring:
+  application.name: poc-07-mqtt5-features
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: mqtt5-poc
+  username: backend-svc
+  password: backend-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 60
+  connection-timeout-seconds: 10
+  max-inflight: 50
+  automatic-reconnect: true
+  tls:
+    enabled: false
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics

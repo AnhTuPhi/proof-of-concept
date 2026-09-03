@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>vn.com.ipas</groupId>
+    <artifactId>ecommerce-pocs</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>ecommerce-pocs</name>
+    <description>Bread-and-butter senior e-commerce backend patterns: inventory reservation, oversell prevention, flash sale, coupon engine, fulfillment routing</description>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <exec.maven.version>3.5.0</exec.maven.version>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                    <compilerArgs>
+                        <arg>--enable-preview</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec.maven.version}</version>
+                <executions>
+                    <execution>
+                        <id>inventory</id>
+                        <configuration>
+                            <mainClass>vn.com.ipas.poc.inventory.InventoryReservationPoc</mainClass>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>oversell</id>
+                        <configuration>
+                            <mainClass>vn.com.ipas.poc.oversell.OversellPreventionPoc</mainClass>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>flashsale</id>
+                        <configuration>
+                            <mainClass>vn.com.ipas.poc.flashsale.FlashSalePoc</mainClass>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>coupon</id>
+                        <configuration>
+                            <mainClass>vn.com.ipas.poc.coupon.CouponEnginePoc</mainClass>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>fulfillment</id>
+                        <configuration>
+                            <mainClass>vn.com.ipas.poc.fulfillment.FulfillmentRoutingPoc</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

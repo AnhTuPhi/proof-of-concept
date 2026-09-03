@@ -1,0 +1,33 @@
+server:
+  port: 8105
+spring:
+  application.name: poc-05-auth-jwt-mtls
+  datasource:
+    url: jdbc:postgresql://localhost:5432/emqx
+    username: emqx
+    password: emqx_pass
+    driver-class-name: org.postgresql.Driver
+
+auth:
+  jwt:
+    # MUST match emqx authentication.secret in emqx-overrides.conf.
+    # In production: derive both from a single secret in a secret manager.
+    secret: replace-me-with-real-secret-32-bytes
+    ttl-seconds: 300
+
+mqtt:
+  broker-url: tcp://localhost:1883
+  client-id-prefix: auth-poc
+  username: device-001
+  password: device-001-secret
+  clean-session: true
+  session-expiry-interval: 0
+  keep-alive-seconds: 60
+  connection-timeout-seconds: 10
+  max-inflight: 10
+  automatic-reconnect: false
+  tls:
+    enabled: false
+
+management:
+  endpoints.web.exposure.include: prometheus,health,metrics
