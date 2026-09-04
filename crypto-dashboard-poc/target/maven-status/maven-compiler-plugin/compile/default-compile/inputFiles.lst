@@ -1,0 +1,7 @@
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/CryptoDashboardApplication.java
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/controller/PriceController.java
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/model/PriceTick.java
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/service/BinanceStreamService.java
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/service/CoinbaseStreamService.java
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/service/ExchangeStream.java
+/Users/pat/Documents/Code/Claude/crypto-dashboard-webflux-poc/src/main/java/com/demo/cryptodashboard/service/PriceAggregatorService.java

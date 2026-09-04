@@ -1,0 +1,29 @@
+server:
+  port: 8080
+  # Netty event-loop threads. Default = cores; bump for >50k connections.
+  netty:
+    connection-timeout: 30s
+    idle-timeout: 60s
+
+spring:
+  application:
+    name: crypto-dashboard-webflux-poc
+  # Compress SSE if client supports it (smaller bytes over wire).
+  codec:
+    max-in-memory-size: 1MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.demo.cryptodashboard: INFO
+    reactor.netty.http.client: WARN
+    reactor.netty.http.server: WARN

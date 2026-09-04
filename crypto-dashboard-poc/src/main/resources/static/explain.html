@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>How it works · Crypto WebFlux PoC</title>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#151a24; --panel2:#1a2030; --border:#232a3a;
+  --text:#e6e6e6; --muted:#8a93a8; --gold:#f0b90b;
+  --up:#16c784; --down:#ea3943; --blue:#5b9dff; --violet:#a06bff;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:radial-gradient(1200px 600px at 70% -10%,#131a2a 0,var(--bg) 60%);
+  color:var(--text);line-height:1.55}
+a{color:var(--gold);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 22px 80px}
+header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+h1{margin:0;font-size:26px;color:var(--gold);font-weight:700}
+.pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px;
+  background:rgba(91,157,255,.14);color:var(--blue)}
+p.lede{color:var(--muted);margin:6px 0 22px;font-size:14px;max-width:760px}
+.links{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
+.links a{font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;
+  border:1px solid var(--border);background:var(--panel);color:var(--text)}
+.links a:hover{border-color:var(--gold);text-decoration:none}
+
+/* tabs */
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 20px;border-bottom:1px solid var(--border)}
+.tab{padding:10px 16px;font-size:13px;font-weight:600;color:var(--muted);
+  cursor:pointer;border:none;background:none;border-bottom:2px solid transparent}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+.panel-view{display:none;animation:fade .3s ease}
+.panel-view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin:0 0 16px}
+.card h2{margin:0 0 4px;font-size:17px}
+.card h3{margin:14px 0 6px;font-size:14px;color:var(--gold)}
+.muted{color:var(--muted)}
+.grid{display:grid;gap:14px}
+@media(min-width:720px){.grid.two{grid-template-columns:1fr 1fr}.grid.three{grid-template-columns:1fr 1fr 1fr}}
+
+code,.mono{font-family:'SF Mono',Menlo,Consolas,monospace}
+code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:12px;color:#d7e0ff}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);text-transform:uppercase;font-size:10.5px;letter-spacing:.5px}
+tr:last-child td{border-bottom:0}
+
+/* problem chips */
+.pchip{display:inline-block;font-family:monospace;font-weight:700;font-size:11px;
+  padding:2px 7px;border-radius:6px;background:rgba(240,185,11,.14);color:var(--gold);margin-right:6px}
+.tag{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;
+  background:var(--panel2);color:var(--muted);border:1px solid var(--border);margin:2px 4px 2px 0}
+
+/* diagram */
+.diagram-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;overflow-x:auto}
+svg{display:block;width:100%;min-width:640px;height:auto}
+.lbl{fill:var(--text);font-size:12px;font-weight:600}
+.lbl.sm{fill:var(--muted);font-size:10.5px;font-weight:500}
+.box{fill:var(--panel2);stroke:var(--border);stroke-width:1}
+.box.bin{stroke:var(--gold)}
+.box.cb{stroke:var(--blue)}
+.box.hub{stroke:var(--violet)}
+.box.client{stroke:var(--up)}
+.wire{stroke:var(--border);stroke-width:1.5;fill:none}
+
+/* controls */
+.controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.controls label{font-size:12px;color:var(--muted)}
+input[type=range]{accent-color:var(--gold);width:220px;vertical-align:middle}
+.readout{display:flex;gap:22px;flex-wrap:wrap;margin-top:12px}
+.stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;min-width:150px}
+.stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.stat .v{font-size:22px;font-weight:700;margin-top:2px}
+.v.good{color:var(--up)} .v.bad{color:var(--down)} .v.gold{color:var(--gold)}
+.bar{height:8px;border-radius:5px;background:var(--panel);overflow:hidden;margin-top:8px}
+.bar > i{display:block;height:100%;border-radius:5px;transition:width .25s ease}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+.btn{background:var(--gold);color:#000;border:none;cursor:pointer;padding:7px 14px;
+  border-radius:8px;font-weight:600;font-size:12px}
+.btn.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+ul.tight{margin:6px 0 0;padding-left:20px}
+ul.tight li{margin:4px 0}
+.kbd{font-family:monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);
+  border-radius:5px;padding:1px 6px}
+.debt{border-left:3px solid var(--down);padding-left:12px}
+.callout{background:rgba(240,185,11,.08);border:1px solid rgba(240,185,11,.3);border-radius:10px;
+  padding:12px 16px;font-size:13px;margin:14px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Crypto WebFlux PoC</h1>
+  <span class="pill">how it works</span>
+  <div class="links">
+    <a href="/index.html">▶ Live demo</a>
+    <a href="https://github.com" onclick="return false" title="see README.md">README</a>
+    <a href="#" data-tab="scale">Scaling</a>
+  </div>
+</header>
+<p class="lede">
+  One JVM ingests live price ticks from two exchange WebSocket feeds, merges them
+  reactively, and fans them out to thousands of browsers over Server-Sent Events —
+  on a few dozen threads. This page explains the flow, the key tech, why it scales,
+  and where it stops.
+</p>
+
+<div class="tabs">
+  <button class="tab active" data-tab="flow">The flow</button>
+  <button class="tab" data-tab="problems">5 sub-problems</button>
+  <button class="tab" data-tab="tech">Key tech</button>
+  <button class="tab" data-tab="scale">Scaling out</button>
+</div>
+
+<!-- ============ FLOW ============ -->
+<section class="panel-view active" id="flow">
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 780 360" role="img" aria-label="data flow diagram">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#3a465e"/>
+        </marker>
+      </defs>
+
+      <!-- upstream boxes -->
+      <rect class="box bin"  x="14"  y="40"  width="150" height="46" rx="9"/>
+      <text class="lbl"    x="30" y="62">Binance WS</text>
+      <text class="lbl sm" x="30" y="78">1 socket · @ticker</text>
+
+      <rect class="box cb"   x="14"  y="250" width="150" height="46" rx="9"/>
+      <text class="lbl"    x="30" y="272">Coinbase WS</text>
+      <text class="lbl sm" x="30" y="288">1 socket · subscribe</text>
+
+      <!-- sinks -->
+      <rect class="box hub" x="220" y="130" width="170" height="76" rx="10"/>
+      <text class="lbl"    x="236" y="156">Sinks.Many</text>
+      <text class="lbl sm" x="236" y="173">multicast</text>
+      <text class="lbl sm" x="236" y="188">onBackpressureBuffer</text>
+      <text class="lbl sm" x="236" y="200" style="fill:var(--down)">(drop oldest)</text>
+
+      <!-- merge/share -->
+      <rect class="box" x="440" y="140" width="140" height="56" rx="10"/>
+      <text class="lbl"    x="456" y="164">merge · share()</text>
+      <text class="lbl sm" x="456" y="181">1 hot stream</text>
+
+      <!-- clients -->
+      <rect class="box client" x="636" y="20"  width="128" height="34" rx="8"/>
+      <text class="lbl sm" x="650" y="41">SSE client #1</text>
+      <rect class="box client" x="636" y="66"  width="128" height="34" rx="8"/>
+      <text class="lbl sm" x="650" y="87">SSE client #2</text>
+      <rect class="box client" x="636" y="112" width="128" height="34" rx="8"/>
+      <text class="lbl sm" x="650" y="133">SSE client #3</text>
+      <text class="lbl sm" x="650" y="176" style="fill:var(--muted)">…</text>
+      <rect class="box client" x="636" y="196" width="128" height="34" rx="8"/>
+      <text class="lbl sm" x="650" y="217">SSE #5000</text>
+
+      <!-- per-subscriber pipeline note -->
+      <rect x="440" y="250" width="324" height="70" rx="10" fill="rgba(22,199,132,.06)" stroke="var(--up)" stroke-dasharray="4 3"/>
+      <text class="lbl" x="456" y="272" style="fill:var(--up)">per-subscriber (lazy, 0 threads)</text>
+      <text class="lbl sm mono" x="456" y="290">filter → groupBy(symbol) → sample(maxHz)</text>
+      <text class="lbl sm mono" x="456" y="306">concat(snapshot, live) → mergeWith(ping)</text>
+
+      <!-- wires -->
+      <path class="wire" id="p1" d="M164,63 C200,63 200,150 220,150" marker-end="url(#arrow)"/>
+      <path class="wire" id="p2" d="M164,273 C200,273 200,190 220,186" marker-end="url(#arrow)"/>
+      <path class="wire" id="p3" d="M390,168 L440,168" marker-end="url(#arrow)"/>
+      <path class="wire" id="c1" d="M580,160 C610,160 610,37  636,37"  marker-end="url(#arrow)"/>
+      <path class="wire" id="c2" d="M580,164 C610,164 610,83  636,83"  marker-end="url(#arrow)"/>
+      <path class="wire" id="c3" d="M580,168 C610,168 610,129 636,129" marker-end="url(#arrow)"/>
+      <path class="wire" id="c4" d="M580,176 C610,176 610,213 636,213" marker-end="url(#arrow)"/>
+      <path class="wire" d="M510,196 L510,250" stroke-dasharray="3 3"/>
+
+      <!-- animated ticks -->
+      <g id="particles"></g>
+    </svg>
+  </div>
+  <div class="legend">
+    <span><b style="background:var(--gold)"></b>Binance tick</span>
+    <span><b style="background:var(--blue)"></b>Coinbase tick</span>
+    <span><b style="background:var(--violet)"></b>merged / shared</span>
+    <span><b style="background:var(--up)"></b>fan-out to SSE</span>
+  </div>
+
+  <div class="grid two" style="margin-top:16px">
+    <div class="card">
+      <h2>Read it left → right</h2>
+      <ul class="tight">
+        <li><b>Ingest.</b> Each exchange service holds <b>one</b> non-blocking WebSocket on the Netty event loop and normalizes raw JSON into a <code>PriceTick</code>.</li>
+        <li><b>Hub.</b> Ticks go into a <code>Sinks.Many.multicast()</code> with a bounded, drop-oldest buffer — one slow reader can't stall the rest.</li>
+        <li><b>Merge + share.</b> <code>Flux.merge(sources).share()</code> makes a single hot stream all clients read from.</li>
+        <li><b>Fan-out.</b> Each SSE client attaches a lazy <code>filter → groupBy → sample</code> pipeline, prepends a snapshot, and mixes in a heartbeat.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>The invariants that make it cheap</h2>
+      <ul class="tight">
+        <li><span class="pchip">1</span> upstream WS per exchange — <b>independent of client count</b>.</li>
+        <li><span class="pchip">1</span> Netty event loop (≈ CPU cores) serves every socket read &amp; write.</li>
+        <li><span class="pchip">0</span> extra threads per subscriber — operators are a lazy plan, not workers.</li>
+      </ul>
+      <div class="callout">
+        Net effect measured in the load test: <b>5000 SSE clients on ~30–40 threads, &lt; 200 MB heap.</b>
+        Jump to the <a href="#" data-tab="scale">Scaling</a> tab to play with the numbers.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PROBLEMS ============ -->
+<section class="panel-view" id="problems">
+  <p class="muted" style="font-size:13px">The single goal “push prices to everyone” hides five distinct sub-problems. Each is a place a naive build quietly falls over — with the reactive primitive that solves it.</p>
+  <div class="grid two">
+    <div class="card"><h2><span class="pchip">P1</span> Connection amplification</h2>
+      <p class="muted" style="font-size:13px">Hold <b>thousands of idle, long-lived</b> downstream connections at once. Thread-per-connection pins a thread each and caps out at a few hundred–thousand.</p>
+      <h3>Solved by</h3><p><b>Reactor Netty event loop.</b> SSE responses are <code>Flux&lt;ServerSentEvent&gt;</code>; idle streams pin no thread.</p>
+      <span class="tag">Netty</span><span class="tag">SSE</span>
+    </div>
+    <div class="card"><h2><span class="pchip">P2</span> Source multiplexing (fan-in)</h2>
+      <p class="muted" style="font-size:13px">Merge N async upstreams with different protocols (Binance URL-subscribe vs Coinbase send-a-frame) into one normalized stream — no callback soup.</p>
+      <h3>Solved by</h3><p><code>Flux.merge(List&lt;ExchangeStream&gt;)</code> behind one interface; each quirk stays inside its service.</p>
+      <span class="tag">Flux.merge</span><span class="tag">ExchangeStream</span>
+    </div>
+    <div class="card"><h2><span class="pchip">P3</span> Upstream connection economy</h2>
+      <p class="muted" style="font-size:13px">5000 browsers must <b>not</b> become 5000 exchange sockets (rate-limited / bannable). Decouple upstream count from downstream count.</p>
+      <h3>Solved by</h3><p><code>Sinks.Many.multicast()</code> hub + aggregator <code>.share()</code> → N clients, 1 WS per exchange.</p>
+      <span class="tag">Sinks.Many</span><span class="tag">share()</span>
+    </div>
+    <div class="card"><h2><span class="pchip">P4</span> Backpressure &amp; slow consumers</h2>
+      <p class="muted" style="font-size:13px">Upstream may fire 100 ticks/s. A slow client must not force unbounded buffering, and one stuck client must not stall the other 4999.</p>
+      <h3>Solved by</h3><p><code>onBackpressureBuffer(1024,false)</code> (drop-oldest) + per-client <code>groupBy(symbol).sample(1000/maxHz)</code>.</p>
+      <span class="tag">drop-oldest</span><span class="tag">groupBy</span><span class="tag">sample</span>
+    </div>
+    <div class="card"><h2><span class="pchip">P5</span> Cold-start &amp; liveness</h2>
+      <p class="muted" style="font-size:13px">A mid-session joiner would see a blank UI; idle streams get killed by proxy idle-timeouts.</p>
+      <h3>Solved by</h3><p>Warm-up <code>concat(snapshot, live)</code> from a <code>ConcurrentHashMap</code> + 15s <code>mergeWith(heartbeat)</code>.</p>
+      <span class="tag">snapshot</span><span class="tag">concat</span><span class="tag">heartbeat</span>
+    </div>
+    <div class="card debt"><h2>What we're protecting</h2>
+      <ul class="tight" style="font-size:13px">
+        <li><b>Server threads</b> — stay flat (tens) as connections grow (thousands).</li>
+        <li><b>Server heap</b> — bounded buffers, no per-client unbounded queue.</li>
+        <li><b>Upstream sockets</b> — a rate-limited external resource; exactly one per exchange.</li>
+        <li><b>Delivery isolation</b> — one slow client never becomes another's latency.</li>
+        <li><b>First paint</b> — a new client sees data immediately.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TECH ============ -->
+<section class="panel-view" id="tech">
+  <div class="card">
+    <h2>Key technology by responsibility</h2>
+    <table>
+      <thead><tr><th>Responsibility</th><th>Technology</th><th>Solves</th></tr></thead>
+      <tbody>
+        <tr><td>Non-blocking transport</td><td class="mono">Reactor Netty event loop</td><td><span class="pchip">P1</span></td></tr>
+        <tr><td>Upstream WS client</td><td class="mono">ReactorNettyWebSocketClient</td><td><span class="pchip">P2</span><span class="pchip">P3</span></td></tr>
+        <tr><td>1 → N hub</td><td class="mono">Sinks.Many.multicast().onBackpressureBuffer(1024,false)</td><td><span class="pchip">P3</span><span class="pchip">P4</span></td></tr>
+        <tr><td>Fan-in of N exchanges</td><td class="mono">Flux.merge(List&lt;Flux&gt;)</td><td><span class="pchip">P2</span></td></tr>
+        <tr><td>Hot, share-once stream</td><td class="mono">.share() = publish().refCount(1)</td><td><span class="pchip">P3</span></td></tr>
+        <tr><td>Warm-start</td><td class="mono">ConcurrentHashMap + Flux.concat(snapshot,live)</td><td><span class="pchip">P5</span></td></tr>
+        <tr><td>Per-client rate control</td><td class="mono">groupBy(symbol).flatMap(g→g.sample(window))</td><td><span class="pchip">P4</span></td></tr>
+        <tr><td>One-way push to browser</td><td class="mono">Flux&lt;ServerSentEvent&gt; · text/event-stream</td><td><span class="pchip">P1</span></td></tr>
+        <tr><td>Liveness across proxies</td><td class="mono">mergeWith(heartbeat) · 15s ping</td><td><span class="pchip">P5</span></td></tr>
+        <tr><td>Resilience</td><td class="mono">Retry.backoff(MAX,1s).maxBackoff(30s)</td><td>reconnect</td></tr>
+        <tr><td>Observability</td><td class="mono">Actuator + Micrometer + Prometheus</td><td>proof</td></tr>
+        <tr><td>Extensibility seam</td><td class="mono">ExchangeStream + List&lt;&gt; injection</td><td><span class="pchip">P2</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid two">
+    <div class="card">
+      <h2>The data contract</h2>
+      <p class="muted" style="font-size:13px">A normalized record is the boundary that isolates exchange-specific JSON from the rest of the system.</p>
+      <pre style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;font-size:12px" class="mono">record PriceTick(
+  String  symbol,        // BTCUSDT
+  double  price,
+  double  changePercent, // 24h
+  double  volume,        // 24h base
+  String  source,        // binance | coinbase
+  Instant timestamp)</pre>
+      <p class="note">Coinbase <code>BTC-USD</code>→<code>BTCUSDT</code> and change-from-<code>open_24h</code> are computed <b>inside</b> the Coinbase service, so nothing downstream sees vendor shapes.</p>
+    </div>
+    <div class="card debt">
+      <h2>Tech debt we knowingly accept</h2>
+      <ul class="tight" style="font-size:12.5px">
+        <li><b>D1 Single-instance state</b> — snapshot, sinks, counter all in-JVM. <span class="muted">Biggest debt; breaks at ≥2 instances.</span></li>
+        <li><b>D2 Per-instance upstream WS</b> — K pods → K sockets/exchange.</li>
+        <li><b>D3 Drop-oldest is lossy</b> — fine for display, wrong for audit/OHLC.</li>
+        <li><b>D4 No persistence/replay</b> — late joiner gets snapshot+live only.</li>
+        <li><b>D5 Per-service ObjectMapper</b> + hand-rolled parse.</li>
+        <li><b>D6 Symbols hard-coded</b> — redeploy to change coverage.</li>
+        <li><b>D7 No auth / entitlements / per-user caps.</b></li>
+        <li><b>D8 Isolation leans on bounded buffer</b>, not true pull backpressure.</li>
+        <li><b>D9 Subscriber count is process-local</b> AtomicLong.</li>
+      </ul>
+      <p class="note">D1, D2, D9 are exactly what the <a href="#" data-tab="scale">Scaling</a> design resolves.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCALE ============ -->
+<section class="panel-view" id="scale">
+  <div class="card">
+    <h2>Threads vs connections — why the event loop wins</h2>
+    <p class="muted" style="font-size:13px">Drag the slider. Reactive server threads stay flat while a thread-per-connection (MVC + <code>SseEmitter</code>) model climbs into its wall.</p>
+    <div class="controls">
+      <label>concurrent SSE clients: <b id="cReadout" style="color:var(--text)">5000</b></label>
+      <input id="clients" type="range" min="100" max="20000" step="100" value="5000"/>
+    </div>
+    <div class="readout">
+      <div class="stat"><div class="k">WebFlux threads</div><div class="v good" id="wfThreads">~34</div>
+        <div class="bar"><i id="wfBar" style="background:var(--up)"></i></div></div>
+      <div class="stat"><div class="k">Thread-per-conn threads</div><div class="v bad" id="tpcThreads">5000</div>
+        <div class="bar"><i id="tpcBar" style="background:var(--down)"></i></div></div>
+      <div class="stat"><div class="k">Upstream WS / exchange</div><div class="v gold">1</div>
+        <div class="note" style="margin:0">unchanged by client count</div></div>
+      <div class="stat"><div class="k">Est. WebFlux heap</div><div class="v good" id="heap">~120 MB</div>
+        <div class="note" style="margin:0">bounded buffers</div></div>
+    </div>
+    <p class="note" id="verdict"></p>
+  </div>
+
+  <div class="card">
+    <h2>What breaks at N instances — and the fix</h2>
+    <p class="muted" style="font-size:13px">The single-instance design has <b>no shared state</b>. Scaling it out doesn't distribute load — it forks the system into N inconsistent copies. Toggle the design:</p>
+    <div class="controls" style="margin-bottom:10px">
+      <button class="btn ghost" id="modeNaive">Naive replication</button>
+      <button class="btn" id="modeFixed">Ingest / edge split</button>
+    </div>
+
+    <div id="naiveView">
+      <div class="diagram-wrap" style="border:none;background:none;padding:0">
+        <svg viewBox="0 0 780 250" aria-label="naive scaling">
+          <rect x="300" y="6" width="180" height="30" rx="8" class="box"/>
+          <text class="lbl sm" x="330" y="26">Load balancer</text>
+          <!-- 3 pods each with own WS -->
+          <g>
+            <rect x="40"  y="80" width="200" height="120" rx="10" class="box"/>
+            <rect x="290" y="80" width="200" height="120" rx="10" class="box"/>
+            <rect x="540" y="80" width="200" height="120" rx="10" class="box"/>
+            <text class="lbl" x="60"  y="104">Pod A</text>
+            <text class="lbl" x="310" y="104">Pod B</text>
+            <text class="lbl" x="560" y="104">Pod C</text>
+            <text class="lbl sm" x="60"  y="126" style="fill:var(--down)">WS→BIN  WS→CB</text>
+            <text class="lbl sm" x="310" y="126" style="fill:var(--down)">WS→BIN  WS→CB</text>
+            <text class="lbl sm" x="560" y="126" style="fill:var(--down)">WS→BIN  WS→CB</text>
+            <text class="lbl sm" x="60"  y="146">snapshot_A</text>
+            <text class="lbl sm" x="310" y="146">snapshot_B</text>
+            <text class="lbl sm" x="560" y="146">snapshot_C</text>
+            <text class="lbl sm" x="60"  y="166" style="fill:var(--muted)">subs=1700 (partial)</text>
+            <text class="lbl sm" x="310" y="166" style="fill:var(--muted)">subs=1600 (partial)</text>
+            <text class="lbl sm" x="560" y="166" style="fill:var(--muted)">subs=1700 (partial)</text>
+          </g>
+          <path class="wire" d="M360,36 L150,80" marker-end="url(#arrow)"/>
+          <path class="wire" d="M390,36 L390,80" marker-end="url(#arrow)"/>
+          <path class="wire" d="M420,36 L640,80" marker-end="url(#arrow)"/>
+        </svg>
+      </div>
+      <ul class="tight" style="font-size:12.5px">
+        <li><b style="color:var(--down)">C1</b> 3× upstream sockets per exchange → rate limits / bans.</li>
+        <li><b style="color:var(--down)">C2</b> Divergent snapshots — clients disagree on first paint.</li>
+        <li><b style="color:var(--down)">C3</b> Subscriber count is per-pod → dashboards under-report ×N.</li>
+        <li><b style="color:var(--down)">C4</b> Reconnect roulette: a pod death re-lands clients on a different snapshot → visible jump.</li>
+      </ul>
+    </div>
+
+    <div id="fixedView" style="display:none">
+      <div class="diagram-wrap" style="border:none;background:none;padding:0">
+        <svg viewBox="0 0 780 300" aria-label="ingest edge split">
+          <rect x="30" y="20" width="220" height="90" rx="10" class="box bin"/>
+          <text class="lbl" x="48" y="44">INGEST (singleton)</text>
+          <text class="lbl sm" x="48" y="64" style="fill:var(--up)">1 WS→BIN   1 WS→CB</text>
+          <text class="lbl sm" x="48" y="82">normalize → publish</text>
+          <text class="lbl sm" x="48" y="100" style="fill:var(--muted)">leader-elected · never autoscales</text>
+
+          <rect x="300" y="20" width="180" height="90" rx="10" class="box hub"/>
+          <text class="lbl" x="318" y="44">Shared bus</text>
+          <text class="lbl sm" x="318" y="64">Redis / Kafka / NATS</text>
+          <text class="lbl sm" x="318" y="82">topic per symbol</text>
+          <text class="lbl sm" x="318" y="100" style="fill:var(--muted)">+ snapshot store</text>
+
+          <g>
+            <rect x="540" y="10"  width="210" height="42" rx="9" class="box client"/>
+            <rect x="540" y="64"  width="210" height="42" rx="9" class="box client"/>
+            <rect x="540" y="118" width="210" height="42" rx="9" class="box client"/>
+            <text class="lbl sm" x="558" y="36">Edge A → SSE (scale me)</text>
+            <text class="lbl sm" x="558" y="90">Edge B → SSE (scale me)</text>
+            <text class="lbl sm" x="558" y="144">Edge C → SSE (scale me)</text>
+          </g>
+
+          <path class="wire" d="M250,65 L300,65" marker-end="url(#arrow)"/>
+          <path class="wire" d="M480,55 L540,31"  marker-end="url(#arrow)"/>
+          <path class="wire" d="M480,65 L540,85"  marker-end="url(#arrow)"/>
+          <path class="wire" d="M480,80 L540,139" marker-end="url(#arrow)"/>
+
+          <text class="lbl sm" x="30" y="150" style="fill:var(--up)">✓ C1 one WS/exchange cluster-wide</text>
+          <text class="lbl sm" x="30" y="170" style="fill:var(--up)">✓ C2/C4 all edges share one snapshot</text>
+          <text class="lbl sm" x="30" y="190" style="fill:var(--up)">✓ C3 counts summed in Prometheus</text>
+          <text class="lbl sm" x="30" y="210" style="fill:var(--up)">✓ C5 per-symbol order via partitioned bus</text>
+        </svg>
+      </div>
+      <ul class="tight" style="font-size:12.5px">
+        <li><b>Ingest tier</b> owns the only upstream WS — run as a cluster singleton (Lease/StatefulSet + PDB).</li>
+        <li><b>Shared bus</b> carries normalized ticks, partitioned by symbol (ordering); a <b>Redis snapshot hash</b> gives identical warm-start.</li>
+        <li><b>Edge tier</b> is what you <code>kubectl scale</code> — reuse the same <code>filter→groupBy→sample→concat→heartbeat</code> pipeline verbatim.</li>
+        <li>Autoscale on <b>active-connections</b> custom metric, <b>not CPU</b> (idle SSE is cheap). LB idle-timeout &gt; heartbeat.</li>
+      </ul>
+    </div>
+    <div class="callout">Full write-up incl. K8s &amp; VM specifics and the migration checklist → <b>CONSISTENCY.md</b> (in the repo root).</div>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+
+<script>
+// ---- tabs ----
+const tabs = document.querySelectorAll('.tab');
+const views = document.querySelectorAll('.panel-view');
+function show(id){
+  tabs.forEach(t=>t.classList.toggle('active', t.dataset.tab===id));
+  views.forEach(v=>v.classList.toggle('active', v.id===id));
+  if(id==='flow') startParticles();
+}
+tabs.forEach(t=>t.addEventListener('click',()=>show(t.dataset.tab)));
+document.querySelectorAll('[data-tab]').forEach(el=>{
+  if(!el.classList.contains('tab'))
+    el.addEventListener('click',e=>{e.preventDefault();show(el.dataset.tab);window.scrollTo({top:0,behavior:'smooth'});});
+});
+
+// ---- flow particles ----
+const NS='http://www.w3.org/2000/svg';
+let particleTimer=null;
+function spawn(pathId,color){
+  const svg=document.querySelector('#flow svg');
+  const path=svg.querySelector('#'+pathId);
+  if(!path) return;
+  const c=document.createElementNS(NS,'circle');
+  c.setAttribute('r','4'); c.setAttribute('fill',color);
+  c.setAttribute('opacity','0.95');
+  const am=document.createElementNS(NS,'animateMotion');
+  am.setAttribute('dur','1.15s'); am.setAttribute('repeatCount','1');
+  am.setAttribute('path',path.getAttribute('d'));
+  c.appendChild(am);
+  document.getElementById('particles').appendChild(c);
+  am.beginElement();
+  setTimeout(()=>c.remove(),1300);
+}
+function burst(){
+  const gold='#f0b90b',blue='#5b9dff',violet='#a06bff',up='#16c784';
+  // upstream -> sinks
+  if(Math.random()>.35) spawn('p1',gold);
+  if(Math.random()>.5)  spawn('p2',blue);
+  // sinks -> merge/share
+  setTimeout(()=>spawn('p3',violet),260);
+  // fan-out to clients
+  setTimeout(()=>{['c1','c2','c3','c4'].forEach((id,i)=>setTimeout(()=>spawn(id,up),i*60));},560);
+}
+function startParticles(){
+  if(particleTimer) return;
+  particleTimer=setInterval(burst,900);
+  burst();
+}
+function stopParticles(){clearInterval(particleTimer);particleTimer=null;}
+startParticles();
+
+// ---- scaling calculator ----
+const clients=document.getElementById('clients');
+const cReadout=document.getElementById('cReadout');
+const wfThreads=document.getElementById('wfThreads');
+const tpcThreads=document.getElementById('tpcThreads');
+const heap=document.getElementById('heap');
+const wfBar=document.getElementById('wfBar');
+const tpcBar=document.getElementById('tpcBar');
+const verdict=document.getElementById('verdict');
+function fmt(n){return n.toLocaleString('en-US');}
+function recalc(){
+  const n=+clients.value;
+  cReadout.textContent=fmt(n);
+  // WebFlux: ~cores*2 event loop + a handful of housekeeping; flat.
+  const wf=32+Math.round(Math.log2(n/100))*1;   // barely moves
+  // thread-per-conn: ~1 thread/conn, but Tomcat caps ~200 by default -> wall.
+  const CAP=200;
+  const tpc=Math.min(n,CAP);
+  const capped=n>CAP;
+  wfThreads.textContent='~'+wf;
+  tpcThreads.textContent=capped?(CAP+' (maxed)'):fmt(tpc);
+  // heap ~ 20MB base + ~20KB/conn buffers
+  const mb=Math.round(90+n*0.02);
+  heap.textContent='~'+mb+' MB';
+  wfBar.style.width=Math.min(100,wf/2)+'%';
+  tpcBar.style.width=Math.min(100,tpc/CAP*100)+'%';
+  verdict.innerHTML = capped
+    ? `At <b>${fmt(n)}</b> clients the thread-per-connection server is <b style="color:var(--down)">saturated at its ${CAP}-thread pool</b> — new connections queue or fail. WebFlux serves all ${fmt(n)} on <b style="color:var(--up)">~${wf} threads</b>.`
+    : `At <b>${fmt(n)}</b> clients both cope, but thread-per-connection already burns <b>${fmt(tpc)}</b> threads vs WebFlux's <b style="color:var(--up)">~${wf}</b>. Push the slider past 200 to hit the wall.`;
+}
+clients.addEventListener('input',recalc);
+recalc();
+
+// ---- scale design toggle ----
+const naiveView=document.getElementById('naiveView');
+const fixedView=document.getElementById('fixedView');
+const bN=document.getElementById('modeNaive'), bF=document.getElementById('modeFixed');
+bN.addEventListener('click',()=>{naiveView.style.display='';fixedView.style.display='none';
+  bN.className='btn';bF.className='btn ghost';});
+bF.addEventListener('click',()=>{naiveView.style.display='none';fixedView.style.display='';
+  bF.className='btn';bN.className='btn ghost';});
+</script>
+</body>
+</html>

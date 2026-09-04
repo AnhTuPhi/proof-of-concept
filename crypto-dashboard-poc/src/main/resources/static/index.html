@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Crypto Realtime Dashboard - WebFlux PoC</title>
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --panel: #151a24;
+            --row: #1a2030;
+            --border: #232a3a;
+            --text: #e6e6e6;
+            --muted: #8a93a8;
+            --gold: #f0b90b;
+            --up: #16c784;
+            --down: #ea3943;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 24px;
+        }
+        header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+        h1 { margin: 0; color: var(--gold); font-weight: 600; font-size: 24px; }
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+        }
+        .badge.connected { background: rgba(22,199,132,.15); color: var(--up); }
+        .badge.disconnected { background: rgba(234,57,67,.15); color: var(--down); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        .dot.pulse { animation: pulse 1.2s infinite; }
+        @keyframes pulse {
+            0%,100% { opacity: 1; transform: scale(1); }
+            50%     { opacity: .4; transform: scale(.8); }
+        }
+        p.sub { color: var(--muted); margin: 4px 0 20px; font-size: 13px; }
+        .controls {
+            display: flex; gap: 12px; flex-wrap: wrap;
+            background: var(--panel); padding: 12px 16px; border-radius: 10px;
+            margin-bottom: 16px; align-items: center;
+        }
+        .controls label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+        .controls input {
+            background: var(--row); color: var(--text); border: 1px solid var(--border);
+            padding: 6px 10px; border-radius: 6px; font-size: 13px; outline: none;
+            min-width: 220px;
+        }
+        .controls button {
+            background: var(--gold); color: #000; border: none; cursor: pointer;
+            padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 13px;
+        }
+        .stats { color: var(--muted); font-size: 12px; margin-left: auto; }
+        .stats span { color: var(--text); font-weight: 600; }
+        table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+        th, td { padding: 12px 16px; text-align: right; }
+        th:first-child, td:first-child { text-align: left; }
+        th {
+            background: #1f2535; color: var(--muted);
+            font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+            font-weight: 600;
+        }
+        tr { border-bottom: 1px solid var(--border); transition: background-color .4s ease; }
+        tr:last-child { border-bottom: 0; }
+        .symbol { font-weight: 700; letter-spacing: .3px; }
+        .source { color: var(--muted); font-size: 11px; margin-left: 6px; }
+        .price { font-family: 'SF Mono', Menlo, monospace; font-size: 16px; }
+        .up { color: var(--up); }
+        .down { color: var(--down); }
+        .flash-up { background: rgba(22,199,132,.18); }
+        .flash-down { background: rgba(234,57,67,.18); }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Crypto Realtime Dashboard</h1>
+    <span id="status" class="badge disconnected"><span class="dot pulse"></span> connecting…</span>
+</header>
+<p class="sub">Spring WebFlux SSE · sources: Binance + Coinbase (public WS)</p>
+
+<div class="controls">
+    <label>symbols</label>
+    <input id="symbolsInput" placeholder="BTCUSDT,ETHUSDT (blank = all)"/>
+    <label>maxHz</label>
+    <input id="hzInput" type="number" value="10" min="1" max="100" style="min-width:80px"/>
+    <button id="applyBtn">apply</button>
+    <div class="stats">
+        ticks received: <span id="tickCount">0</span> &nbsp;|&nbsp;
+        last update: <span id="lastUpdate">—</span>
+    </div>
+</div>
+
+<table>
+    <thead>
+    <tr>
+        <th>Symbol</th>
+        <th>Price (USD)</th>
+        <th>24h Change</th>
+        <th>24h Volume</th>
+        <th>Updated</th>
+    </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+</table>
+
+<script>
+    const rows = {};                       // key = symbol@source -> <tr>
+    const tbody = document.getElementById('rows');
+    const status = document.getElementById('status');
+    const tickCountEl = document.getElementById('tickCount');
+    const lastUpdateEl = document.getElementById('lastUpdate');
+    let es = null;
+    let tickCount = 0;
+
+    function connect() {
+        if (es) es.close();
+
+        const symbols = document.getElementById('symbolsInput').value.trim();
+        const hz = document.getElementById('hzInput').value || 10;
+
+        const params = new URLSearchParams();
+        if (symbols) params.set('symbols', symbols);
+        params.set('maxHz', hz);
+
+        es = new EventSource('/api/prices/stream?' + params.toString());
+
+        es.onopen = () => {
+            status.innerHTML = '<span class="dot"></span> connected';
+            status.className = 'badge connected';
+        };
+        es.onerror = () => {
+            status.innerHTML = '<span class="dot pulse"></span> reconnecting…';
+            status.className = 'badge disconnected';
+        };
+        es.addEventListener('price', e => {
+            const tick = JSON.parse(e.data);
+            tickCount++;
+            tickCountEl.textContent = tickCount.toLocaleString();
+            lastUpdateEl.textContent = new Date().toLocaleTimeString();
+            renderTick(tick);
+        });
+    }
+
+    function renderTick(tick) {
+        const key = tick.symbol + '@' + tick.source;
+        let row = rows[key];
+        if (!row) {
+            row = document.createElement('tr');
+            row.innerHTML = `
+                <td><span class="symbol">${tick.symbol}</span><span class="source">${tick.source}</span></td>
+                <td class="price">—</td>
+                <td class="change">—</td>
+                <td class="volume">—</td>
+                <td class="time muted">—</td>`;
+            tbody.appendChild(row);
+            rows[key] = row;
+            row.dataset.lastPrice = tick.price;
+            sortRows();
+        }
+
+        const prev = parseFloat(row.dataset.lastPrice);
+        const flash = tick.price > prev ? 'flash-up'
+                    : tick.price < prev ? 'flash-down'
+                    : '';
+        row.dataset.lastPrice = tick.price;
+
+        row.querySelector('.price').textContent = formatPrice(tick.price);
+        const changeCell = row.querySelector('.change');
+        changeCell.textContent = (tick.changePercent >= 0 ? '+' : '') + tick.changePercent.toFixed(2) + '%';
+        changeCell.className = 'change ' + (tick.changePercent >= 0 ? 'up' : 'down');
+        row.querySelector('.volume').textContent = formatVolume(tick.volume);
+        row.querySelector('.time').textContent = new Date(tick.timestamp).toLocaleTimeString();
+
+        if (flash) {
+            row.classList.add(flash);
+            setTimeout(() => row.classList.remove(flash), 450);
+        }
+    }
+
+    function sortRows() {
+        const sorted = Object.entries(rows).sort((a, b) => a[0].localeCompare(b[0]));
+        sorted.forEach(([_, r]) => tbody.appendChild(r));
+    }
+
+    function formatPrice(p) {
+        if (p >= 100)  return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (p >= 1)    return p.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
+        return p.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 8 });
+    }
+
+    function formatVolume(v) {
+        if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+        if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+        if (v >= 1e3) return (v / 1e3).toFixed(2) + 'K';
+        return v.toFixed(0);
+    }
+
+    document.getElementById('applyBtn').addEventListener('click', () => {
+        for (const k of Object.keys(rows)) { tbody.removeChild(rows[k]); delete rows[k]; }
+        tickCount = 0;
+        tickCountEl.textContent = '0';
+        connect();
+    });
+
+    connect();
+</script>
+</body>
+</html>
