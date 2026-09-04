@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Seat Hold POC</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>1. Seat Hold (TTL)</h1>
+    <p class="muted">Soft hold (Caffeine, 5 min TTL) &rarr; hard hold (DB row, payment deadline) &rarr; paid. Scheduled sweeper releases expired hard holds every 30 s.</p>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Home</a>
+    <a href="seat.html" class="active">1. Seat hold</a>
+    <a href="calendar.html">2. Calendar conflict</a>
+    <a href="overbooking.html">3. Overbooking</a>
+    <a href="flows.html">Flows</a>
+  </nav>
+  <main>
+    <section class="card">
+      <h2>Seats</h2>
+      <div class="flex">
+        <label>Resource
+          <select id="resource">
+            <option value="VN201">Flight VN201</option>
+            <option value="HANOI-DELUXE">Hotel HANOI-DELUXE</option>
+          </select>
+        </label>
+        <button class="secondary" onclick="loadSeats()">Reload</button>
+      </div>
+      <table>
+        <thead><tr><th>Code</th><th>Status</th><th>Customer / Action</th></tr></thead>
+        <tbody id="seats"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Active hold</h2>
+      <div id="holdDetail" class="muted">No active hold. Pick a seat above to start.</div>
+      <div class="flex" id="holdActions" style="display:none; margin-top:12px;">
+        <button onclick="hardHold()">Promote to hard hold &amp; start payment</button>
+        <button class="secondary" onclick="cancelSoft()">Release soft hold</button>
+      </div>
+      <div class="flex" id="payActions" style="display:none; margin-top:12px;">
+        <button onclick="payNow()">Confirm payment</button>
+        <button class="secondary" onclick="releaseHard()">Release hard hold</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Activity log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+  <script src="common.js"></script>
+  <script>
+    let customer = 'customer-' + Math.random().toString(36).slice(2, 7);
+    let active = null;
+
+    async function loadSeats() {
+      const resourceId = document.getElementById('resource').value;
+      const seats = await api('GET', `/api/seats?resourceId=${resourceId}`);
+      const tbody = document.getElementById('seats');
+      tbody.innerHTML = '';
+      seats.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.code} <span class="muted">(${s.type})</span></td>
+          <td><span class="pill ${s.status.toLowerCase()}">${s.status}</span></td>
+          <td><button ${s.status !== 'AVAILABLE' ? 'disabled' : ''} onclick="softHold(${s.id})">Pick seat</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function softHold(id) {
+      try {
+        const r = await api('POST', `/api/seats/${id}/soft-hold`, { customerId: customer });
+        active = { seatId: id, customerId: customer, softToken: r.token, seatCode: r.seatCode, expiresAt: r.expiresAt };
+        log(document.getElementById('log'), `Soft hold ${r.seatCode} -> token ${r.token.slice(0,8)}… exp ${fmtInstant(r.expiresAt)}`, 'ok');
+        renderHold();
+        loadSeats();
+      } catch (e) {
+        log(document.getElementById('log'), `Soft hold failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function hardHold() {
+      try {
+        const r = await api('POST', `/api/seats/${active.seatId}/hard-hold`,
+          { customerId: customer, softToken: active.softToken, paymentWindowSeconds: 60 });
+        active.holdId = r.holdId;
+        active.paymentDeadline = r.paymentDeadline;
+        log(document.getElementById('log'),
+          `Hard hold ${r.seatCode} -> holdId ${r.holdId} pay-by ${fmtInstant(r.paymentDeadline)}`, 'warn');
+        renderHold();
+        loadSeats();
+      } catch (e) {
+        log(document.getElementById('log'), `Hard hold failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function payNow() {
+      try {
+        await api('POST', `/api/seats/${active.seatId}/pay`,
+          { customerId: customer, holdId: active.holdId });
+        log(document.getElementById('log'), `Payment confirmed for ${active.seatCode}`, 'ok');
+        active = null;
+        renderHold();
+        loadSeats();
+      } catch (e) {
+        log(document.getElementById('log'), `Payment failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function releaseHard() {
+      try {
+        await api('POST', `/api/seats/${active.seatId}/release/${active.holdId}`);
+        log(document.getElementById('log'), `Released hard hold ${active.holdId}`, 'warn');
+        active = null;
+        renderHold();
+        loadSeats();
+      } catch (e) {
+        log(document.getElementById('log'), `Release failed: ${e.message}`, 'err');
+      }
+    }
+
+    function cancelSoft() {
+      log(document.getElementById('log'), `Abandoning soft hold for ${active.seatCode} — will expire by ${fmtInstant(active.expiresAt)}`, 'warn');
+      active = null;
+      renderHold();
+    }
+
+    function renderHold() {
+      const detail = document.getElementById('holdDetail');
+      const ha = document.getElementById('holdActions');
+      const pa = document.getElementById('payActions');
+      if (!active) {
+        detail.innerHTML = 'No active hold. Pick a seat above to start.';
+        detail.className = 'muted';
+        ha.style.display = 'none';
+        pa.style.display = 'none';
+        return;
+      }
+      detail.className = '';
+      detail.innerHTML = `
+        Customer <code>${customer}</code> &middot;
+        Seat <strong>${active.seatCode}</strong> &middot;
+        ${active.holdId ? `<span class="pill hard_held">HARD HELD #${active.holdId}</span> pay by ${fmtInstant(active.paymentDeadline)}`
+                        : `<span class="pill available">SOFT HELD</span> token <code>${active.softToken.slice(0,8)}…</code> exp ${fmtInstant(active.expiresAt)}`}
+      `;
+      ha.style.display = active.holdId ? 'none' : 'flex';
+      pa.style.display = active.holdId ? 'flex' : 'none';
+    }
+
+    document.getElementById('resource').addEventListener('change', loadSeats);
+    loadSeats();
+  </script>
+</body>
+</html>

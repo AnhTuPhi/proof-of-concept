@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calendar Conflict POC</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>2. Calendar Conflict</h1>
+    <p class="muted">Recurring rules + exceptions, owner-local timezone, buffer minutes, overlap detected with PESSIMISTIC_WRITE.</p>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Home</a>
+    <a href="seat.html">1. Seat hold</a>
+    <a href="calendar.html" class="active">2. Calendar conflict</a>
+    <a href="overbooking.html">3. Overbooking</a>
+    <a href="flows.html">Flows</a>
+  </nav>
+  <main>
+    <section class="card">
+      <h2>Find open slots</h2>
+      <div class="flex">
+        <label>Owner <select id="owner"></select></label>
+        <label>Date <input type="date" id="date" /></label>
+        <label>Slot min <input type="number" id="slot" value="30" min="5" max="240" style="width:80px" /></label>
+        <button onclick="loadSlots()">Search</button>
+      </div>
+      <div id="ownerInfo" class="muted" style="margin-top:8px"></div>
+      <table>
+        <thead><tr><th>Owner-local start</th><th>UTC start</th><th>Action</th></tr></thead>
+        <tbody id="slots"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Book this slot</h2>
+      <div id="picked" class="muted">No slot picked.</div>
+      <div id="bookForm" style="display:none; margin-top:8px">
+        <div class="flex">
+          <label>Invitee name <input id="invitee" value="Andre Tu" /></label>
+          <label>Invitee timezone
+            <select id="inviteeTz">
+              <option>Asia/Ho_Chi_Minh</option>
+              <option>America/New_York</option>
+              <option>Asia/Tokyo</option>
+              <option>Europe/London</option>
+            </select>
+          </label>
+        </div>
+        <div class="flex" style="margin-top:8px">
+          <button onclick="book()">Book</button>
+          <button class="secondary" onclick="clearPick()">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Bookings for date</h2>
+      <table>
+        <thead><tr><th>Invitee</th><th>Start (UTC)</th><th>End (UTC)</th><th>Status</th><th></th></tr></thead>
+        <tbody id="bookings"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Activity log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+  <script src="common.js"></script>
+  <script>
+    let owners = [];
+    let picked = null;
+
+    async function loadOwners() {
+      owners = await api('GET', '/api/calendar/owners');
+      const sel = document.getElementById('owner');
+      sel.innerHTML = '';
+      owners.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id;
+        opt.textContent = `${o.displayName} (${o.timezone})`;
+        sel.appendChild(opt);
+      });
+      const today = new Date();
+      today.setDate(today.getDate() + 1);
+      document.getElementById('date').value = today.toISOString().slice(0, 10);
+      sel.addEventListener('change', loadSlots);
+      document.getElementById('date').addEventListener('change', loadSlots);
+      loadSlots();
+    }
+
+    async function loadSlots() {
+      const ownerId = document.getElementById('owner').value;
+      const date = document.getElementById('date').value;
+      const slot = parseInt(document.getElementById('slot').value || '30', 10);
+      const owner = owners.find(o => o.id === ownerId);
+      document.getElementById('ownerInfo').textContent =
+        owner ? `Owner timezone ${owner.timezone}, buffer ${owner.bufferMinutes} min` : '';
+      try {
+        const slots = await api('GET',
+          `/api/calendar/owners/${ownerId}/slots?from=${date}&to=${date}&slotMinutes=${slot}`);
+        const tbody = document.getElementById('slots');
+        tbody.innerHTML = '';
+        if (!slots.length) {
+          tbody.innerHTML = '<tr><td colspan="3" class="muted">No open slots in this window.</td></tr>';
+        }
+        slots.forEach(s => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${s.startInOwnerTz}</td>
+            <td>${fmtInstant(s.startUtc)}</td>
+            <td><button onclick='pick(${JSON.stringify(s).replace(/"/g, "&quot;")})'>Pick</button></td>
+          `;
+          tbody.appendChild(tr);
+        });
+        loadBookings();
+      } catch (e) {
+        log(document.getElementById('log'), `Slot fetch failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function loadBookings() {
+      const ownerId = document.getElementById('owner').value;
+      const date = document.getElementById('date').value;
+      const bs = await api('GET',
+        `/api/calendar/owners/${ownerId}/bookings?from=${date}&to=${date}`);
+      const tbody = document.getElementById('bookings');
+      tbody.innerHTML = '';
+      if (!bs.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No bookings.</td></tr>';
+      }
+      bs.forEach(b => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${b.inviteeName} <span class="muted">(${b.inviteeTimezone})</span></td>
+          <td>${fmtInstant(b.startUtc)}</td>
+          <td>${fmtInstant(b.endUtc)}</td>
+          <td><span class="pill ${b.status.toLowerCase()}">${b.status}</span></td>
+          <td><button class="secondary" onclick="cancelBooking(${b.id})">Cancel</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function pick(s) {
+      picked = s;
+      document.getElementById('picked').innerHTML =
+        `Slot <strong>${s.startInOwnerTz}</strong> &middot; UTC ${fmtInstant(s.startUtc)} &rarr; ${fmtInstant(s.endUtc)}`;
+      document.getElementById('bookForm').style.display = '';
+    }
+
+    function clearPick() {
+      picked = null;
+      document.getElementById('picked').textContent = 'No slot picked.';
+      document.getElementById('bookForm').style.display = 'none';
+    }
+
+    async function book() {
+      if (!picked) return;
+      const ownerId = document.getElementById('owner').value;
+      const inviteeName = document.getElementById('invitee').value.trim();
+      const inviteeTz = document.getElementById('inviteeTz').value;
+      const startUtcDate = new Date(picked.startUtc);
+      const endUtcDate = new Date(picked.endUtc);
+      const dur = Math.round((endUtcDate - startUtcDate) / 60000);
+      const localInInviteeTz = formatInTz(startUtcDate, inviteeTz);
+      try {
+        const b = await api('POST', `/api/calendar/owners/${ownerId}/bookings`, {
+          inviteeName,
+          startInInviteeTz: localInInviteeTz,
+          durationMinutes: dur,
+          inviteeTimezone: inviteeTz,
+        });
+        log(document.getElementById('log'),
+          `Booked id=${b.id} ${b.inviteeName} ${fmtInstant(b.startUtc)} (invitee tz ${inviteeTz})`, 'ok');
+        clearPick();
+        loadSlots();
+      } catch (e) {
+        log(document.getElementById('log'), `Book failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function cancelBooking(id) {
+      await api('DELETE', `/api/calendar/bookings/${id}`);
+      log(document.getElementById('log'), `Cancelled booking ${id}`, 'warn');
+      loadSlots();
+    }
+
+    function formatInTz(date, tz) {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).formatToParts(date);
+      const get = t => parts.find(p => p.type === t).value;
+      return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+    }
+
+    loadOwners();
+  </script>
+</body>
+</html>

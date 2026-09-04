@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Overbooking POC</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>3. Overbooking</h1>
+    <p class="muted">Sell up to <code>capacity × (1 + overbookFactor)</code>. At boarding, bump volunteers first (high willingness), then involuntary by reverse fare-rank.</p>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Home</a>
+    <a href="seat.html">1. Seat hold</a>
+    <a href="calendar.html">2. Calendar conflict</a>
+    <a href="overbooking.html" class="active">3. Overbooking</a>
+    <a href="flows.html">Flows</a>
+  </nav>
+  <main>
+    <section class="card">
+      <h2>Flight</h2>
+      <div class="flex">
+        <label>Flight <select id="flight"></select></label>
+        <button class="secondary" onclick="loadAll()">Reload</button>
+      </div>
+      <div id="state" class="muted" style="margin-top:8px"></div>
+    </section>
+
+    <section class="card">
+      <h2>Sell a ticket</h2>
+      <div class="flex">
+        <label>Passenger <input id="passenger" value="Pax-001" /></label>
+        <label>Fare class
+          <select id="fareClass">
+            <option>FIRST</option>
+            <option>BUSINESS</option>
+            <option selected>ECONOMY</option>
+            <option>BASIC_ECONOMY</option>
+          </select>
+        </label>
+        <label>Volunteer willingness (0-100) <input type="number" id="will" value="20" min="0" max="100" style="width:80px" /></label>
+        <button onclick="book()">Sell ticket</button>
+        <button class="secondary" onclick="bookBatch(5)">+5 random</button>
+        <button class="secondary" onclick="bookBatch(15)">+15 random</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Confirmed passengers</h2>
+      <p class="muted">Mark check-boxes to simulate no-shows before boarding.</p>
+      <table>
+        <thead><tr><th><input type="checkbox" id="markAllNoShow" onchange="toggleAllNoShow(this.checked)" title="no-show all" /></th><th>Name</th><th>Fare</th><th>Willingness</th><th></th></tr></thead>
+        <tbody id="bookings"></tbody>
+      </table>
+      <div style="margin-top:12px" class="flex">
+        <button onclick="board()">Run boarding</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Boarding result</h2>
+      <div id="boardResult" class="muted">Not yet run.</div>
+    </section>
+
+    <section class="card">
+      <h2>Activity log</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+  <script src="common.js"></script>
+  <script>
+    let flights = [];
+    let noShowSet = new Set();
+
+    async function loadFlights() {
+      flights = await api('GET', '/api/overbooking/flights');
+      const sel = document.getElementById('flight');
+      sel.innerHTML = '';
+      flights.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.code;
+        opt.textContent = `${f.code} ${f.origin}→${f.destination} cap ${f.capacity} ceiling ${f.sellCeiling}`;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener('change', loadAll);
+      loadAll();
+    }
+
+    async function loadAll() {
+      noShowSet = new Set();
+      document.getElementById('markAllNoShow').checked = false;
+      await Promise.all([loadState(), loadBookings()]);
+    }
+
+    async function loadState() {
+      const code = document.getElementById('flight').value;
+      const s = await api('GET', `/api/overbooking/flights/${code}`);
+      document.getElementById('state').innerHTML = `
+        Capacity <strong>${s.capacity}</strong> &middot; sell ceiling <strong>${s.sellCeiling}</strong> &middot;
+        confirmed <strong>${s.confirmed}</strong> &middot; bumped ${s.bumped} &middot; boarded ${s.boarded} &middot;
+        E[show-ups] ${s.expectedShowUps} &middot; E[overflow] <span class="pill ${s.expectedOverflow > 0 ? 'hard_held' : 'available'}">${s.expectedOverflow}</span>
+      `;
+    }
+
+    async function loadBookings() {
+      const code = document.getElementById('flight').value;
+      const bs = await api('GET', `/api/overbooking/flights/${code}/bookings`);
+      const tbody = document.getElementById('bookings');
+      tbody.innerHTML = '';
+      if (!bs.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted">No confirmed passengers.</td></tr>';
+        return;
+      }
+      bs.forEach(b => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="checkbox" data-id="${b.id}" ${noShowSet.has(b.id) ? 'checked' : ''} onchange="toggleNoShow(${b.id}, this.checked)" /></td>
+          <td>${b.passengerName}</td>
+          <td>${b.fareClass} <span class="muted">($${b.farePaid})</span></td>
+          <td>${b.volunteerWillingness}</td>
+          <td><span class="pill ${b.status.toLowerCase()}">${b.status}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function toggleNoShow(id, checked) {
+      if (checked) noShowSet.add(id); else noShowSet.delete(id);
+    }
+
+    function toggleAllNoShow(checked) {
+      noShowSet = new Set();
+      document.querySelectorAll('#bookings input[type=checkbox]').forEach(c => {
+        c.checked = checked;
+        if (checked) noShowSet.add(parseInt(c.dataset.id, 10));
+      });
+    }
+
+    async function book() {
+      try {
+        const r = await api('POST', `/api/overbooking/flights/${document.getElementById('flight').value}/book`, {
+          passengerName: document.getElementById('passenger').value,
+          fareClass: document.getElementById('fareClass').value,
+          volunteerWillingness: parseInt(document.getElementById('will').value || '0', 10),
+        });
+        log(document.getElementById('log'),
+          `Sold ${r.fareClass} to ${r.passengerName} (will ${r.volunteerWillingness})`, 'ok');
+        document.getElementById('passenger').value = 'Pax-' + Math.random().toString(36).slice(2, 6);
+        loadAll();
+      } catch (e) {
+        log(document.getElementById('log'), `Sell failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function bookBatch(n) {
+      const classes = ['ECONOMY','ECONOMY','BASIC_ECONOMY','BUSINESS'];
+      let sold = 0;
+      for (let i = 0; i < n; i++) {
+        try {
+          await api('POST', `/api/overbooking/flights/${document.getElementById('flight').value}/book`, {
+            passengerName: 'Pax-' + Math.random().toString(36).slice(2, 6),
+            fareClass: classes[Math.floor(Math.random() * classes.length)],
+            volunteerWillingness: Math.floor(Math.random() * 100),
+          });
+          sold++;
+        } catch (e) {
+          log(document.getElementById('log'), `Batch sell stopped: ${e.message}`, 'warn');
+          break;
+        }
+      }
+      log(document.getElementById('log'), `Batch sold ${sold}/${n}`, 'ok');
+      loadAll();
+    }
+
+    async function board() {
+      const code = document.getElementById('flight').value;
+      try {
+        const r = await api('POST', `/api/overbooking/flights/${code}/board`, {
+          noShowBookingIds: [...noShowSet],
+        });
+        const box = document.getElementById('boardResult');
+        box.className = '';
+        box.innerHTML = `
+          Boarded <strong>${r.boarded}/${r.capacity}</strong> &middot;
+          voluntary bumps ${r.voluntaryBumps} &middot;
+          involuntary bumps ${r.involuntaryBumps} &middot;
+          compensation total <strong>$${r.compensationTotal}</strong>
+          ${r.bumped.length ? '<h3>Bumped</h3>' + r.bumped.map(b => `
+            <div>&middot; ${b.passengerName} (${b.fareClass}) — <span class="pill ${b.kind === 'voluntary' ? 'hard_held' : 'sold'}">${b.kind}</span> $${b.compensationPaid}</div>
+          `).join('') : ''}
+        `;
+        log(document.getElementById('log'),
+          `Boarded ${r.boarded}/${r.capacity}, bumps v=${r.voluntaryBumps} i=${r.involuntaryBumps}, comp $${r.compensationTotal}`, 'warn');
+        loadAll();
+      } catch (e) {
+        log(document.getElementById('log'), `Board failed: ${e.message}`, 'err');
+      }
+    }
+
+    loadFlights();
+  </script>
+</body>
+</html>

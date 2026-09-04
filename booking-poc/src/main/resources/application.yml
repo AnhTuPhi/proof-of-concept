@@ -1,0 +1,54 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: booking-poc
+  # Keep Spring Data Redis auto-config from forcing a connect when we're in
+  # single-pod mode. Override (or remove) this exclude when running multi-pod.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+  datasource:
+    url: jdbc:h2:mem:bookingpoc;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: true
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc.time_zone: UTC
+  sql:
+    init:
+      mode: always
+
+booking:
+  seat:
+    soft-hold-ttl-seconds: 300
+    sweep-interval-seconds: 30
+    # memory = Caffeine (single JVM); redis = cross-node via RedisSoftHoldStore.
+    # When flipping to redis: drop the spring.autoconfigure.exclude above and
+    # provide spring.data.redis.host / port / password.
+    hold-store: memory
+  overbooking:
+    default-overbook-factor: 0.10
+    voluntary-bonus: 200
+    involuntary-compensation: 800
+  scheduler:
+    # When true, HardHoldSweeper acquires a ShedLock so only one replica
+    # runs the sweep per interval. Requires the shedlock table (DDL in data.sql).
+    distributed: false
+
+logging:
+  level:
+    com.example.bookingpoc: DEBUG

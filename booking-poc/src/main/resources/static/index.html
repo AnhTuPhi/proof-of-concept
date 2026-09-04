@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Booking POC</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Booking / Reservation POC</h1>
+    <p class="muted">Three patterns in one Spring Boot app — pick a tab.</p>
+  </header>
+  <nav class="tabs">
+    <a href="seat.html">1. Seat hold (TTL)</a>
+    <a href="calendar.html">2. Calendar conflict</a>
+    <a href="overbooking.html">3. Overbooking</a>
+    <a href="flows.html">Flows</a>
+  </nav>
+  <main>
+    <section class="card">
+      <h2>What's inside</h2>
+      <ul>
+        <li><strong>Seat hold</strong> — soft hold in memory (TTL 5 min) then hard hold in DB before payment. Scheduled sweeper auto-releases stale holds. Pattern works for hotel rooms or flight seats.</li>
+        <li><strong>Calendar conflict</strong> — Calendly-style. Recurring availability rules + per-date exceptions, multi-timezone, buffer minutes, overlap detected with PESSIMISTIC_WRITE so the second booker loses cleanly.</li>
+        <li><strong>Overbooking</strong> — Airline pattern. Sell beyond capacity by a factor, then bump volunteers (high willingness, cheap fare) first, involuntary by reverse fare-rank if needed. Returns compensation totals.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h2>Quick links</h2>
+      <ul>
+        <li><a href="flows.html">Flow diagrams</a> — state machines, sequence diagrams, race-condition walkthroughs.</li>
+        <li><strong>Technical reference</strong> — <code>docs/TECHNICAL.md</code> in the repo: key tech per POC, trade-offs, tech debt, design tokens, stable error codes.</li>
+        <li><code>GET /api/seats?resourceId=VN201</code></li>
+        <li><code>GET /api/calendar/owners/andre/slots?from=2026-06-22&amp;to=2026-06-22</code></li>
+        <li><code>GET /api/overbooking/flights/VN201</code></li>
+        <li><a href="/h2" target="_blank">H2 console</a> (JDBC URL <code>jdbc:h2:mem:bookingpoc</code>, user <code>sa</code>, no password)</li>
+      </ul>
+    </section>
+  </main>
+  <footer><small>Spring Boot 3.4 + H2 + Caffeine + Java 21</small></footer>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Booking POC — Flows</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .flow-block {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .flow-block .diagram {
+      background: var(--bg-card-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      overflow-x: auto;
+    }
+    .flow-block ol { margin: 0 0 0 18px; padding: 0; }
+    .flow-block ol li { margin-bottom: 8px; }
+    .flow-block code {
+      background: var(--bg-card-2);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .mermaid { font-size: 13px; }
+    .race { margin-top: 24px; }
+    .race h3 { color: var(--warn); }
+    .full-card { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Flows</h1>
+    <p class="muted">State machines and sequence diagrams for each pattern — what changes, who locks what, where the race goes.</p>
+  </header>
+  <nav class="tabs">
+    <a href="index.html">Home</a>
+    <a href="seat.html">1. Seat hold</a>
+    <a href="calendar.html">2. Calendar conflict</a>
+    <a href="overbooking.html">3. Overbooking</a>
+    <a href="flows.html" class="active">Flows</a>
+  </nav>
+
+  <main>
+    <!-- POC 17 ------------------------------------------------------------>
+    <section class="card full-card">
+      <h2>1. Seat hold — TTL soft hold → DB hard hold → paid</h2>
+      <p class="muted">A two-stage lock: cheap, in-memory check-and-set survives a mobile network drop; the DB hard hold writes a payment deadline a scheduled sweeper later reaps.</p>
+
+      <div class="flow-block">
+        <div class="diagram">
+          <h3>State machine</h3>
+          <div class="mermaid">
+stateDiagram-v2
+  [*] --> AVAILABLE
+  AVAILABLE --> SOFT_HELD: soft-hold (Caffeine.putIfAbsent)
+  SOFT_HELD --> AVAILABLE: TTL 5 min (Caffeine evict)
+  SOFT_HELD --> HARD_HELD: hard-hold (consume token, SELECT FOR UPDATE)
+  HARD_HELD --> SOLD: pay (within deadline)
+  HARD_HELD --> AVAILABLE: deadline passed (HardHoldSweeper)
+  HARD_HELD --> AVAILABLE: explicit release
+  SOLD --> [*]
+          </div>
+        </div>
+        <div>
+          <h3>Walkthrough</h3>
+          <ol>
+            <li><strong>Pick seat</strong> — client <code>POST /api/seats/{id}/soft-hold</code>. <code>SoftHoldStore.tryAcquire</code> calls <code>cache.asMap().putIfAbsent(seatId, hold)</code>. Atomic. Winner gets a token + <code>expiresAt</code> (5 min). Losers see <code>409 seat_held</code>.</li>
+            <li><strong>Start checkout</strong> — client <code>POST /hard-hold</code> with the soft token. <code>SoftHoldStore.consume</code> validates and removes the in-memory hold; <code>SELECT … FOR UPDATE</code> locks the seat row; status flips <em>AVAILABLE → HARD_HELD</em>; a <code>HardHold</code> row is written with <code>paymentDeadline = now + 120 s</code>.</li>
+            <li><strong>Pay</strong> — <code>POST /pay</code> within the deadline: status flips <em>HARD_HELD → SOLD</em>, hold status becomes <code>PAID</code>.</li>
+            <li><strong>Auto-release</strong> — every 30 s <code>HardHoldSweeper</code> runs <code>SeatService.sweepExpired</code>: <code>PENDING</code> holds past the deadline are flipped to <code>EXPIRED</code> and the seat returns to <em>AVAILABLE</em>.</li>
+            <li><strong>Mobile drop</strong> — if the client never POSTs <code>/hard-hold</code>, the soft hold simply expires from Caffeine after 5 min. No DB pressure, no manual cleanup.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="race full-card">
+        <h3>Race: two shoppers tap "12A" at the same millisecond</h3>
+        <div class="diagram">
+          <div class="mermaid">
+sequenceDiagram
+  participant A as Shopper A
+  participant B as Shopper B
+  participant S as SeatController
+  participant H as SoftHoldStore
+  participant DB
+  par concurrent taps
+    A->>S: POST /soft-hold {seat 12A}
+    B->>S: POST /soft-hold {seat 12A}
+  end
+  S->>H: putIfAbsent(12A, A)
+  S->>H: putIfAbsent(12A, B)
+  H-->>S: A wins (returns null)
+  H-->>S: B loses (returns A's hold)
+  S-->>A: 200 {token=abc, expiresAt}
+  S-->>B: 409 seat_held
+  A->>S: POST /hard-hold {softToken=abc}
+  S->>H: consume(12A, abc) → ok
+  S->>DB: SELECT * FROM seats WHERE id=12A FOR UPDATE
+  DB-->>S: locked row, status=AVAILABLE
+  S->>DB: INSERT INTO hard_holds; UPDATE seats SET status=HARD_HELD
+  S-->>A: 200 {holdId, paymentDeadline}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- POC 18 ------------------------------------------------------------>
+    <section class="card full-card">
+      <h2>2. Calendar conflict — recurring rules + multi-timezone + pessimistic overlap</h2>
+      <p class="muted">Rules are wall-clock, instants are UTC, overlap test runs under a pessimistic lock so two bookers cannot both win the same window.</p>
+
+      <div class="flow-block">
+        <div class="diagram">
+          <h3>Booking pipeline</h3>
+          <div class="mermaid">
+flowchart TD
+  A[Client posts<br/>startInInviteeTz + tz + duration] --> B[CalendarService.book]
+  B --> C[Resolve invitee ZoneId → Instant startUtc, endUtc]
+  C --> D[Apply owner bufferMinutes on both sides]
+  D --> E[BookingRepository.findOverlappingForUpdate<br/>PESSIMISTIC_WRITE]
+  E -->|overlap empty| F[INSERT Booking<br/>status=CONFIRMED]
+  E -->|overlap found| G[throw 409 slot_taken<br/>with colliding invitee]
+  F --> H[200 OK<br/>return BookingView]
+          </div>
+        </div>
+        <div>
+          <h3>Walkthrough</h3>
+          <ol>
+            <li><strong>Recurring rules are wall-clock</strong> — <code>RecurringRule</code> stores <code>LocalTime startLocal</code> + <code>dayOfWeek</code> in the owner's IANA zone. "9:00 every Monday" stays 9:00 across DST shifts because we never freeze it to a UTC offset.</li>
+            <li><strong>Slot expansion</strong> — <code>AvailabilityService.openSlots</code> walks the date range, applies the rules, removes per-date <code>RecurrenceException</code> blockers, subtracts confirmed bookings (with owner buffer), and emits open slots as <code>Instant</code> pairs.</li>
+            <li><strong>Invitee submits local time + tz</strong> — POC accepts the invitee's wall-clock <em>and</em> their IANA zone. Server resolves to UTC: <code>localStart.atZone(inviteeZone).toInstant()</code>.</li>
+            <li><strong>Buffer expansion</strong> — for the overlap query we widen by <code>owner.bufferMinutes</code> on both ends, so back-to-back bookings still respect the gap.</li>
+            <li><strong>Pessimistic overlap check</strong> — <code>findOverlappingForUpdate</code> runs <code>start_a &lt; end_b AND end_a &gt; start_b</code> under <code>LockModeType.PESSIMISTIC_WRITE</code>. Two clients arriving at the same millisecond serialize; loser sees <code>409 slot_taken</code>.</li>
+            <li><strong>UTC always wins</strong> — DB stores <code>Instant</code> only; invitee timezone is kept as a label for display, never used for comparison.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="race full-card">
+        <h3>Race: NYC and Tokyo shoppers book the same Hanoi 14:00 slot</h3>
+        <div class="diagram">
+          <div class="mermaid">
+sequenceDiagram
+  participant NYC as Shopper (NYC tz)
+  participant TYO as Shopper (Tokyo tz)
+  participant API as CalendarController
+  participant SVC as CalendarService
+  participant DB
+  Note over NYC,TYO: Both pick "Hanoi 14:00–14:30" displayed in their local zones
+  par concurrent submits
+    NYC->>API: POST {startInInviteeTz=03:00 EST, tz=America/New_York}
+    TYO->>API: POST {startInInviteeTz=16:00 JST, tz=Asia/Tokyo}
+  end
+  API->>SVC: book(...) — both resolve to 2026-06-22T07:00:00Z
+  SVC->>DB: findOverlappingForUpdate (PESSIMISTIC_WRITE)
+  SVC->>DB: findOverlappingForUpdate (PESSIMISTIC_WRITE)
+  Note over DB: Second caller blocks on row lock until first commits
+  DB-->>SVC: empty (first caller)
+  SVC->>DB: INSERT booking NYC, commit
+  DB-->>SVC: now finds NYC's booking (second caller)
+  SVC-->>API: throw 409 slot_taken
+  API-->>NYC: 200 booking_id=42
+  API-->>TYO: 409 {code:slot_taken, message:"Owner already has NYC booked from ..."}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- POC 19 ------------------------------------------------------------>
+    <section class="card full-card">
+      <h2>3. Overbooking — probabilistic sell + two-pass bumping + compensation ledger</h2>
+      <p class="muted">Sell beyond capacity; at boarding, prefer volunteers (cheaper to comp), then bump involuntary in reverse fare-rank.</p>
+
+      <div class="flow-block">
+        <div class="diagram">
+          <h3>Boarding flow</h3>
+          <div class="mermaid">
+flowchart TD
+  Start([Boarding triggered]) --> SR[Mark no-shows from request]
+  SR --> CO{show-ups &gt; capacity?}
+  CO -- no --> Board[All show-ups → BOARDED]
+  CO -- yes --> V[Pass 1: VOLUNTEER<br/>sort by willingness desc,<br/>then fare-rank desc<br/>require willingness ≥ 30]
+  V --> VL{overflow &gt; 0<br/>and volunteers left?}
+  VL -- yes --> VB[Bump volunteer<br/>pay voluntary bonus<br/>status = BUMPED_VOLUNTARY]
+  VB --> VL
+  VL -- no --> I{still overflow?}
+  I -- no --> Board
+  I -- yes --> IP[Pass 2: INVOLUNTARY<br/>sort by reverse fare-rank,<br/>then createdAt desc]
+  IP --> IB[Bump<br/>pay involuntary compensation<br/>status = BUMPED_INVOLUNTARY]
+  IB --> I
+  Board --> Done([Return BoardingResult<br/>boarded, voluntaryBumps,<br/>involuntaryBumps, compTotal])
+          </div>
+        </div>
+        <div>
+          <h3>Walkthrough</h3>
+          <ol>
+            <li><strong>Sell ceiling</strong> = <code>capacity × (1 + overbookFactor)</code>. <code>OverbookingService.book</code> locks the flight row (<code>SELECT FOR UPDATE</code>) and counts <code>CONFIRMED</code> bookings — if we're already at the ceiling, return <code>409 sold_out</code>.</li>
+            <li><strong>At boarding</strong>, request lists <code>noShowBookingIds</code>. Those flip to <code>NO_SHOW</code> and don't compete for seats.</li>
+            <li><strong>Volunteer pass</strong> — survivors sorted by <code>volunteerWillingness</code> desc, then by lowest fare rank (BASIC_ECONOMY first). Anyone ≥ 30 willingness takes the <code>voluntary-bonus</code> ($200 default) and is bumped first. Pass stops when overflow hits 0 or willing volunteers run out.</li>
+            <li><strong>Involuntary pass</strong> — remaining sorted by <em>reverse</em> fare rank then most recent createdAt: cheapest classes go first, and within a class the latest sales bump first. Each pays <code>involuntary-compensation</code> ($800 default).</li>
+            <li><strong>Compensation ledger</strong> — every bump persists <code>compensationPaid</code>. The boarding response totals it so analytics can compare against the extra revenue earned by selling those overbooked tickets.</li>
+            <li><strong>Why this ordering</strong> — voluntary first because $200 &lt; $800 per bump; reverse-fare second because the legal/contractual exposure is lowest on the cheapest fare classes; recent-first ensures loyalty/long-booked passengers stay onboard.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="race full-card">
+        <h3>Numerical example — flight VN201, capacity 10, factor 0.20 (ceiling 12)</h3>
+        <div class="diagram">
+          <div class="mermaid">
+flowchart LR
+  S0[12 sold:<br/>2× FIRST<br/>3× BUSINESS<br/>4× ECONOMY<br/>3× BASIC_ECONOMY] --> S1[At boarding,<br/>1 BASIC_ECONOMY no-shows<br/>→ 11 show-ups]
+  S1 --> S2{overflow = 1}
+  S2 --> S3[Pass 1: 2 volunteers<br/>willingness 80 / 60]
+  S3 --> S4[Bump highest-willingness<br/>BASIC_ECONOMY w=80<br/>pay $200]
+  S4 --> S5[overflow = 0 → done]
+  S5 --> R[Result:<br/>boarded=10/10<br/>voluntary=1<br/>involuntary=0<br/>comp=$200]
+          </div>
+        </div>
+        <p class="muted" style="margin-top:8px"><strong>Tuning:</strong> if no-show rate is empirically 10%, then expected show-ups at ceiling 12 is <code>12 × 0.9 = 10.8</code>. We over-board by ~0.8 on average — comp paid less than the revenue of the 2 extra tickets sold. That's the trade.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer><small>Spring Boot 3.4 + H2 + Caffeine + Java 21 &middot; Diagrams rendered by Mermaid.</small></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        background: '#1f232c',
+        primaryColor: '#1f232c',
+        primaryTextColor: '#e5e7eb',
+        primaryBorderColor: '#2a2f3a',
+        lineColor: '#94a3b8',
+        secondaryColor: '#181b22',
+        tertiaryColor: '#0f1115',
+        actorBkg: '#181b22',
+        actorBorder: '#2a2f3a',
+        actorTextColor: '#e5e7eb',
+        signalColor: '#94a3b8',
+        signalTextColor: '#e5e7eb',
+        labelBoxBkgColor: '#1f232c',
+        labelTextColor: '#e5e7eb',
+        noteBkgColor: '#1f232c',
+        noteTextColor: '#e5e7eb',
+        noteBorderColor: '#2a2f3a',
+      },
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      sequence: { useMaxWidth: true, wrap: true },
+    });
+  </script>
+</body>
+</html>
