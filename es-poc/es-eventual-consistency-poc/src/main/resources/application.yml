@@ -1,0 +1,22 @@
+server:
+  port: 8110
+spring:
+  application:
+    name: es-eventual-consistency-poc
+  datasource:
+    url: jdbc:postgresql://localhost:5432/es_poc
+    username: es_poc
+    password: es_poc
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    schemas: consistency
+    default-schema: consistency
+    create-schemas: true
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  consistency:
+    index-name: cons_products

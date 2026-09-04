@@ -1,0 +1,25 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "analysis": {
+      "analyzer": {
+        "vn_icu": {
+          "type": "custom",
+          "tokenizer": "icu_tokenizer",
+          "filter": ["icu_folding", "lowercase"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id":          { "type": "keyword" },
+      "name":        { "type": "text", "analyzer": "vn_icu" },
+      "description": { "type": "text", "analyzer": "vn_icu" },
+      "category":    { "type": "keyword" },
+      "priceCents":  { "type": "long" }
+    }
+  }
+}

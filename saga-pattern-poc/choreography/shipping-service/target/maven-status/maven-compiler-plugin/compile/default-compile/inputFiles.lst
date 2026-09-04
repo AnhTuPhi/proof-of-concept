@@ -1,0 +1,11 @@
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\config\KafkaConfig.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\domain\ProcessedEvent.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\domain\SagaContext.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\domain\Shipment.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\messaging\SagaEventListener.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\messaging\SagaEventPublisher.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\repository\ProcessedEventRepository.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\repository\SagaContextRepository.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\repository\ShipmentRepository.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\service\ShippingService.java
+D:\Claude\saga-pattern-poc\choreography\shipping-service\src\main\java\com\example\saga\choreography\shipping\ShippingServiceApplication.java

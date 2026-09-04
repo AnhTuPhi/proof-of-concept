@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>es-poc-suite — interactive walkthrough</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d;
+    --fg:#e6edf3; --dim:#8b949e; --line:#30363d;
+    --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --bad:#f85149;
+    --code:#161b22;
+    --pill-bg:#21262d;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--fg);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height:1.5; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  code, pre, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:.92em; }
+  pre { background:var(--code); border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; overflow:auto; font-size:.86em; margin:0; }
+  header {
+    padding:28px 32px 12px; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;
+  }
+  header h1 { font-size:1.6rem; margin:0 0 4px; }
+  header p { margin:0; color:var(--dim); }
+  main { display:grid; grid-template-columns: 260px 1fr; min-height:calc(100vh - 90px); }
+  nav {
+    border-right:1px solid var(--line); padding:16px 0; background:var(--panel);
+    position:sticky; top:0; height:100vh; overflow:auto;
+  }
+  nav h3 { color:var(--dim); font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
+    margin:14px 20px 6px; }
+  nav .navitem {
+    display:block; padding:6px 20px; color:var(--fg); border-left:3px solid transparent;
+    cursor:pointer; font-size:.92rem;
+  }
+  nav .navitem:hover { background:var(--panel2); }
+  nav .navitem.active { background:var(--panel2); border-left-color:var(--accent); }
+  nav .navitem .code { color:var(--dim); font-size:.78rem; }
+  section.page { padding:24px 40px 80px; max-width:1080px; }
+  h2 { margin:0 0 4px; font-size:1.5rem; }
+  .sub { color:var(--dim); margin-bottom:20px; }
+  .pill { display:inline-block; background:var(--pill-bg); color:var(--dim);
+    border:1px solid var(--line); border-radius:999px; padding:2px 10px; font-size:.75rem;
+    margin-right:6px; }
+  .pill.good { color:var(--good); border-color:var(--good); }
+  .pill.warn { color:var(--warn); border-color:var(--warn); }
+  .pill.bad { color:var(--bad); border-color:var(--bad); }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; }
+  .card h4 { margin:0 0 8px; font-size:.9rem; color:var(--dim);
+    text-transform:uppercase; letter-spacing:.06em; }
+  .card ul { margin:0; padding-left:18px; }
+  .card li { margin:3px 0; }
+  table { border-collapse:collapse; width:100%; font-size:.9rem; margin-top:8px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--dim); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.05em; }
+  .diagram { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:16px; margin:18px 0; }
+  .diagram h4 { margin:0 0 10px; font-size:.9rem; color:var(--dim);
+    text-transform:uppercase; letter-spacing:.06em; }
+  svg text { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; fill:var(--fg); }
+  svg .box { fill:var(--panel2); stroke:var(--line); stroke-width:1; }
+  svg .box-hot { fill:#2a1e1e; stroke:var(--bad); }
+  svg .box-good { fill:#1a2a1e; stroke:var(--good); }
+  svg .box-warn { fill:#2a271a; stroke:var(--warn); }
+  svg .arrow { stroke:var(--dim); stroke-width:1.4; fill:none; marker-end:url(#arr); }
+  svg .arrow-hot { stroke:var(--bad); }
+  svg .arrow-good { stroke:var(--good); }
+  svg .label { fill:var(--dim); font-size:11px; }
+  .demo-runner { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:14px 16px; margin:16px 0; }
+  .demo-runner h4 { margin:0 0 10px; font-size:.9rem; color:var(--dim);
+    text-transform:uppercase; letter-spacing:.06em; }
+  .btn { background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:6px; padding:6px 12px; cursor:pointer; font-size:.88rem;
+    margin-right:6px; margin-bottom:6px; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn.primary { border-color:var(--accent); color:var(--accent); }
+  .out { background:var(--code); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; margin-top:10px; min-height:80px; font-size:.85rem; }
+  .out .line { display:block; }
+  .out .ok { color:var(--good); }
+  .out .err { color:var(--bad); }
+  .out .warn { color:var(--warn); }
+  .out .dim { color:var(--dim); }
+  .page { display:none; }
+  .page.active { display:block; }
+  .callout {
+    border-left:3px solid var(--accent); background:var(--panel);
+    padding:10px 14px; border-radius:0 8px 8px 0; margin:12px 0;
+  }
+  .callout.warn { border-left-color:var(--warn); }
+  .callout.bad { border-left-color:var(--bad); }
+  .callout .t { font-weight:600; font-size:.85rem; margin-bottom:4px; }
+  .kv { display:grid; grid-template-columns: 140px 1fr; gap:6px 14px; margin:8px 0; font-size:.9rem; }
+  .kv .k { color:var(--dim); }
+  footer {
+    padding:20px 32px 40px; border-top:1px solid var(--line);
+    color:var(--dim); font-size:.85rem;
+  }
+  @media (max-width:900px) {
+    main { grid-template-columns: 1fr; }
+    nav { position:static; height:auto; }
+    .grid2 { grid-template-columns: 1fr; }
+    section.page { padding:20px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>es-poc-suite — interactive walkthrough</h1>
+    <p>Thirteen ES production pain points. Click a POC to see the flow, the key tech, and a mock demo of the scenario.</p>
+  </div>
+  <div class="sub">
+    <span class="pill">Java 21</span>
+    <span class="pill">Spring Boot 3.4</span>
+    <span class="pill">Elasticsearch 8.15</span>
+    <span class="pill">Postgres 16</span>
+  </div>
+</header>
+
+<main>
+  <nav id="nav">
+    <h3>Start here</h3>
+    <a class="navitem" data-page="overview">Overview</a>
+
+    <h3>Sync &amp; consistency</h3>
+    <a class="navitem" data-page="sync">db-to-es-sync <span class="code">:8101</span></a>
+    <a class="navitem" data-page="consistency">eventual-consistency <span class="code">:8110</span></a>
+
+    <h3>Scale &amp; ops</h3>
+    <a class="navitem" data-page="pagination">deep-pagination <span class="code">:8102</span></a>
+    <a class="navitem" data-page="reindex">zero-downtime-reindex <span class="code">:8103</span></a>
+    <a class="navitem" data-page="bulk">bulk-indexing <span class="code">:8104</span></a>
+    <a class="navitem" data-page="shard">shard-sizing <span class="code">:8111</span></a>
+
+    <h3>Search quality</h3>
+    <a class="navitem" data-page="relevance">relevance-tuning <span class="code">:8106</span></a>
+    <a class="navitem" data-page="vietnamese">vietnamese-search <span class="code">:8105</span></a>
+    <a class="navitem" data-page="autocomplete">autocomplete <span class="code">:8107</span></a>
+
+    <h3>Modern / advanced</h3>
+    <a class="navitem" data-page="hybrid">hybrid-search <span class="code">:8109</span></a>
+    <a class="navitem" data-page="facet">faceted-search <span class="code">:8108</span></a>
+    <a class="navitem" data-page="observability">observability <span class="code">:8112</span></a>
+
+    <h3>Gotchas</h3>
+    <a class="navitem" data-page="gotchas">gotchas <span class="code">:8113</span></a>
+
+    <h3>Reference</h3>
+    <a class="navitem" data-page="scaling">Scaling (k8s / VM)</a>
+  </nav>
+
+  <!-- =============================== OVERVIEW =============================== -->
+  <section class="page active" id="overview">
+    <h2>The umbrella problem</h2>
+    <p class="sub">Teams keep shipping Elasticsearch as if it were a search-flavored database. It isn't, and the failure modes are silent.</p>
+
+    <div class="callout">
+      <div class="t">The three assets this suite protects</div>
+      <ol style="margin:4px 0 4px 18px">
+        <li><b>Data correctness</b> — Postgres ↔ ES agreement, no silent drift.</li>
+        <li><b>Availability</b> — reads and writes survive load, migrations, and failure.</li>
+        <li><b>Search quality</b> — the ordering is the product, not just the set.</li>
+      </ol>
+    </div>
+
+    <h3>The seven silent failure modes</h3>
+    <table>
+      <thead><tr><th>Symptom the user sees</th><th>What ops sees</th><th>POC</th></tr></thead>
+      <tbody>
+        <tr><td>"I created it — search says it doesn't exist."</td><td>ES doc count ≠ DB row count.</td><td><a href="#" data-goto="sync">sync</a> / <a href="#" data-goto="consistency">consistency</a></td></tr>
+        <tr><td>"Page 501: Result window too large."</td><td>from+size collapse.</td><td><a href="#" data-goto="pagination">pagination</a></td></tr>
+        <tr><td>"Nightly import: 8 hours (was supposed to be 15 min)."</td><td>Default refresh + replicas = 100× slowdown.</td><td><a href="#" data-goto="bulk">bulk</a></td></tr>
+        <tr><td>"Top hit for 'iPhone 15' is a phone case."</td><td>No eval; nobody can prove a change helped.</td><td><a href="#" data-goto="relevance">relevance</a></td></tr>
+        <tr><td>Cluster yellow at 3am. 45min recovery.</td><td>Shards wrong. Mapping exploded. Heap crossed 32GB.</td><td><a href="#" data-goto="shard">shard</a> / <a href="#" data-goto="gotchas">gotchas</a></td></tr>
+        <tr><td>VN user: "dien thoai" → 0 hits.</td><td>Default analyzer tokenizes VN badly.</td><td><a href="#" data-goto="vietnamese">vietnamese</a></td></tr>
+        <tr><td>Mapping change needs an outage.</td><td>Non-additive field changes require reindex.</td><td><a href="#" data-goto="reindex">reindex</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3>How the POCs fit together</h3>
+    <div class="diagram">
+      <h4>Data flow (per POC family)</h4>
+      <svg viewBox="0 0 900 320" width="100%">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+          </marker>
+        </defs>
+        <!-- source -->
+        <rect class="box" x="20" y="120" width="160" height="70" rx="8"/>
+        <text x="100" y="150" text-anchor="middle" font-size="13">HTTP API</text>
+        <text x="100" y="170" text-anchor="middle" font-size="11" fill="#8b949e">/api/v1/...</text>
+
+        <!-- sync gate -->
+        <rect class="box box-warn" x="240" y="30" width="200" height="70" rx="8"/>
+        <text x="340" y="55" text-anchor="middle" font-size="13">Postgres (truth)</text>
+        <text x="340" y="75" text-anchor="middle" font-size="11" fill="#8b949e">schema per POC</text>
+
+        <rect class="box" x="240" y="130" width="200" height="70" rx="8"/>
+        <text x="340" y="155" text-anchor="middle" font-size="13">Sync path</text>
+        <text x="340" y="175" text-anchor="middle" font-size="11" fill="#8b949e">outbox / CDC / dual-write</text>
+
+        <rect class="box box-good" x="240" y="230" width="200" height="70" rx="8"/>
+        <text x="340" y="255" text-anchor="middle" font-size="13">Elasticsearch 8.15</text>
+        <text x="340" y="275" text-anchor="middle" font-size="11" fill="#8b949e">shards / aliases / PIT</text>
+
+        <!-- consumer -->
+        <rect class="box" x="500" y="30" width="180" height="70" rx="8"/>
+        <text x="590" y="55" text-anchor="middle" font-size="13">Search UI</text>
+        <text x="590" y="75" text-anchor="middle" font-size="11" fill="#8b949e">list / facets / autocomplete</text>
+
+        <rect class="box" x="500" y="130" width="180" height="70" rx="8"/>
+        <text x="590" y="155" text-anchor="middle" font-size="13">Analytics / export</text>
+        <text x="590" y="175" text-anchor="middle" font-size="11" fill="#8b949e">PIT + search_after</text>
+
+        <rect class="box box-hot" x="500" y="230" width="180" height="70" rx="8"/>
+        <text x="590" y="255" text-anchor="middle" font-size="13">Ops surprises</text>
+        <text x="590" y="275" text-anchor="middle" font-size="11" fill="#8b949e">slow log / hot_threads</text>
+
+        <!-- guardrails -->
+        <rect class="box box-warn" x="720" y="130" width="160" height="70" rx="8"/>
+        <text x="800" y="155" text-anchor="middle" font-size="13">Guardrails</text>
+        <text x="800" y="175" text-anchor="middle" font-size="11" fill="#8b949e">ILM / shard math</text>
+
+        <!-- arrows -->
+        <path class="arrow" d="M 180 155 Q 210 155 240 155"/>
+        <path class="arrow" d="M 340 100 L 340 130"/>
+        <path class="arrow" d="M 340 200 L 340 230"/>
+        <path class="arrow" d="M 440 260 L 500 260"/>
+        <path class="arrow" d="M 440 160 L 500 160"/>
+        <path class="arrow" d="M 440 260 L 500 60"/>
+        <path class="arrow" d="M 680 260 L 720 200"/>
+        <path class="arrow" d="M 440 265 L 720 165"/>
+      </svg>
+    </div>
+  </section>
+
+  <!-- =============================== SYNC =============================== -->
+  <section class="page" id="sync">
+    <h2>db-to-es-sync-poc <span class="pill">port 8101</span></h2>
+    <p class="sub">Three sync strategies side-by-side. Two work. One is here to fail on purpose.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4>Hard problem</h4>
+        <p>ES writes are <b>not part of the DB transaction</b>. Naive dual-write drifts silently forever the first time ES has a hiccup.</p>
+      </div>
+      <div class="card">
+        <h4>What we protect</h4>
+        <p><b>Data correctness</b> — every DB row eventually reflected in ES with the correct value, or drift is detectable and repairable within a bounded window.</p>
+      </div>
+    </div>
+
+    <div class="diagram">
+      <h4>The three strategies</h4>
+      <svg viewBox="0 0 900 340" width="100%">
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b949e"/>
+          </marker>
+        </defs>
+        <!-- Dual-write (bad) -->
+        <text x="20" y="20" font-size="12" fill="#f85149">1. Dual-write (naive)</text>
+        <rect class="box" x="20" y="30" width="120" height="50" rx="6"/>
+        <text x="80" y="60" text-anchor="middle" font-size="12">App @Tx</text>
+        <rect class="box box-warn" x="180" y="30" width="120" height="50" rx="6"/>
+        <text x="240" y="60" text-anchor="middle" font-size="12">Postgres</text>
+        <rect class="box box-hot" x="340" y="30" width="120" height="50" rx="6"/>
+        <text x="400" y="55" text-anchor="middle" font-size="12">ES</text>
+        <text x="400" y="72" text-anchor="middle" font-size="10" fill="#f85149">may fail; drift</text>
+        <path class="arrow arrow-hot" d="M 140 55 L 180 55"/>
+        <path class="arrow arrow-hot" d="M 300 55 L 340 55"/>
+        <text x="500" y="60" font-size="11" fill="#8b949e">→ DB commits, ES throws = permanent silent drift.</text>
+
+        <!-- Outbox (good) -->
+        <text x="20" y="120" font-size="12" fill="#3fb950">2. Transactional outbox + Kafka → ES</text>
+        <rect class="box" x="20" y="130" width="90" height="50" rx="6"/>
+        <text x="65" y="160" text-anchor="middle" font-size="12">App @Tx</text>
+        <rect class="box box-good" x="130" y="130" width="120" height="50" rx="6"/>
+        <text x="190" y="155" text-anchor="middle" font-size="12">Postgres</text>
+        <text x="190" y="170" text-anchor="middle" font-size="10" fill="#8b949e">products + outbox</text>
+        <rect class="box" x="270" y="130" width="90" height="50" rx="6"/>
+        <text x="315" y="160" text-anchor="middle" font-size="12">Poller</text>
+        <rect class="box" x="380" y="130" width="90" height="50" rx="6"/>
+        <text x="425" y="160" text-anchor="middle" font-size="12">Kafka</text>
+        <rect class="box" x="490" y="130" width="120" height="50" rx="6"/>
+        <text x="550" y="160" text-anchor="middle" font-size="12">Indexer</text>
+        <rect class="box box-good" x="630" y="130" width="100" height="50" rx="6"/>
+        <text x="680" y="160" text-anchor="middle" font-size="12">ES</text>
+        <path class="arrow arrow-good" d="M 110 155 L 130 155"/>
+        <path class="arrow arrow-good" d="M 250 155 L 270 155"/>
+        <path class="arrow arrow-good" d="M 360 155 L 380 155"/>
+        <path class="arrow arrow-good" d="M 470 155 L 490 155"/>
+        <path class="arrow arrow-good" d="M 610 155 L 630 155"/>
+        <text x="20" y="200" font-size="11" fill="#8b949e">Same-TX write of entity + outbox row. At-least-once via Kafka, idempotent apply via <code>version_type: external</code>.</text>
+
+        <!-- CDC (good, ops-heavy) -->
+        <text x="20" y="240" font-size="12" fill="#d29922">3. Debezium CDC → ES</text>
+        <rect class="box" x="20" y="250" width="90" height="50" rx="6"/>
+        <text x="65" y="280" text-anchor="middle" font-size="12">App</text>
+        <rect class="box box-good" x="130" y="250" width="120" height="50" rx="6"/>
+        <text x="190" y="275" text-anchor="middle" font-size="12">Postgres</text>
+        <text x="190" y="290" text-anchor="middle" font-size="10" fill="#8b949e">WAL (logical)</text>
+        <rect class="box" x="270" y="250" width="120" height="50" rx="6"/>
+        <text x="330" y="275" text-anchor="middle" font-size="12">Debezium</text>
+        <text x="330" y="290" text-anchor="middle" font-size="10" fill="#8b949e">embedded</text>
+        <rect class="box" x="410" y="250" width="90" height="50" rx="6"/>
+        <text x="455" y="280" text-anchor="middle" font-size="12">Kafka</text>
+        <rect class="box box-good" x="520" y="250" width="100" height="50" rx="6"/>
+        <text x="570" y="280" text-anchor="middle" font-size="12">ES</text>
+        <path class="arrow" d="M 110 275 L 130 275"/>
+        <path class="arrow" d="M 250 275 L 270 275"/>
+        <path class="arrow" d="M 390 275 L 410 275"/>
+        <path class="arrow" d="M 500 275 L 520 275"/>
+        <text x="640" y="285" font-size="11" fill="#8b949e">→ least app code; watch WAL slot fill.</text>
+      </svg>
+    </div>
+
+    <h3>Key tech by responsibility</h3>
+    <table>
+      <thead><tr><th>Layer</th><th>Component</th><th>Tech</th></tr></thead>
+      <tbody>
+        <tr><td>Fault injection</td><td><code>FailureInjector</code></td><td>Header flags (<code>X-Inject-Failure</code>)</td></tr>
+        <tr><td>Outbox writer</td><td><code>OutboxSyncService</code></td><td>JPA <code>@Transactional</code> — entity + outbox row commit together</td></tr>
+        <tr><td>Outbox drain</td><td><code>OutboxPoller</code>, <code>OutboxProducer</code></td><td>Kafka producer, idempotent</td></tr>
+        <tr><td>CDC</td><td><code>DebeziumEngineRunner</code></td><td>Debezium embedded engine</td></tr>
+        <tr><td>ES writes</td><td><code>ProductEsIndexer</code></td><td>Typed client + <code>version_type: external</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="demo-runner" id="demo-sync">
+      <h4>Demo scenario — dual-write drift</h4>
+      <div>
+        <button class="btn primary" data-scenario="sync-happy">Happy path</button>
+        <button class="btn" data-scenario="sync-drift">Inject ES failure (dual-write)</button>
+        <button class="btn" data-scenario="sync-outbox-kill">Kill outbox indexer</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+
+    <div class="callout warn">
+      <div class="t">Tech debt (see TECHNICAL.md)</div>
+      Outbox poller has no leader election → race in multi-pod. Debezium runs embedded (Connect for prod). No dead-letter topic.
+    </div>
+  </section>
+
+  <!-- =============================== CONSISTENCY =============================== -->
+  <section class="page" id="consistency">
+    <h2>es-eventual-consistency-poc <span class="pill">port 8110</span></h2>
+    <p class="sub">The 1-second refresh window is what breaks "I just saved it, where is it?"</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4>Hard problem</h4>
+        <p>ES refreshes new segments every 1s by default. User writes → immediate read → nothing there for up to a second.</p>
+      </div>
+      <div class="card">
+        <h4>What we protect</h4>
+        <p><b>Read-your-writes</b> for user-facing single-doc writes, <b>without wrecking</b> bulk throughput.</p>
+      </div>
+    </div>
+
+    <div class="diagram">
+      <h4>Four modes, one endpoint</h4>
+      <table>
+        <thead><tr><th>Mode</th><th>Write cost</th><th>Read freshness</th><th>Right when</th></tr></thead>
+        <tbody>
+          <tr><td><code>default</code></td><td>~5ms</td><td class="mono" style="color:#f85149">race</td><td>never (the counter-example)</td></tr>
+          <tr><td><code>wait-for</code></td><td class="mono" style="color:#d29922">up to 1s</td><td class="mono" style="color:#3fb950">immediate</td><td>single user writes</td></tr>
+          <tr><td><code>force-refresh</code></td><td>~50ms</td><td class="mono" style="color:#3fb950">immediate</td><td>NEVER in bulk paths</td></tr>
+          <tr><td><code>read-through</code></td><td>~5ms</td><td class="mono" style="color:#3fb950">immediate (via DB)</td><td>client hints "just created"</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Out-of-order writes</h3>
+    <pre><code>esClient.index(i -&gt; i.index("products").id(id)
+    .document(doc)
+    .versionType(VersionType.External)
+    .version(updatedAt.toEpochMilli()));</code></pre>
+    <p>ES rejects any write whose version ≤ current. Kafka replays / rebalances no longer flip docs backwards.</p>
+
+    <div class="demo-runner" id="demo-consistency">
+      <h4>Demo — the race &amp; the fixes</h4>
+      <div>
+        <button class="btn primary" data-scenario="cons-default">mode=default (race)</button>
+        <button class="btn" data-scenario="cons-waitfor">mode=wait-for</button>
+        <button class="btn" data-scenario="cons-readthrough">mode=read-through</button>
+        <button class="btn" data-scenario="cons-version">version skew</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== PAGINATION =============================== -->
+  <section class="page" id="pagination">
+    <h2>es-deep-pagination-poc <span class="pill">port 8102</span></h2>
+    <p class="sub">1M-doc index. Three pagination strategies. Same sort key. Feel the collapse.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4>Hard problem</h4>
+        <p><code>from+size</code> at depth is O(from × shards) memory per query. Past ~10k → hard error.</p>
+      </div>
+      <div class="card">
+        <h4>What we protect</h4>
+        <p><b>Query resource use</b>. No single request can consume unbounded coordinator memory.</p>
+      </div>
+    </div>
+
+    <div class="diagram">
+      <h4>Latency curve (single-node local)</h4>
+      <svg viewBox="0 0 800 240" width="100%">
+        <line x1="60" y1="20" x2="60" y2="200" stroke="#30363d"/>
+        <line x1="60" y1="200" x2="760" y2="200" stroke="#30363d"/>
+        <text x="30" y="105" font-size="11" fill="#8b949e" transform="rotate(-90 30 105)">latency ms</text>
+        <text x="400" y="230" font-size="11" fill="#8b949e" text-anchor="middle">page number (page 1 → 10000)</text>
+
+        <!-- from+size curve (bad) -->
+        <path d="M 80 195 Q 300 190 500 130 T 720 20" stroke="#f85149" stroke-width="2" fill="none"/>
+        <text x="700" y="35" font-size="11" fill="#f85149">from+size</text>
+
+        <!-- search_after (flat) -->
+        <path d="M 80 190 L 720 190" stroke="#3fb950" stroke-width="2" fill="none"/>
+        <text x="670" y="180" font-size="11" fill="#3fb950">search_after (flat)</text>
+
+        <!-- wall -->
+        <line x1="600" y1="30" x2="600" y2="200" stroke="#d29922" stroke-dasharray="4,4"/>
+        <text x="605" y="45" font-size="11" fill="#d29922">10k wall</text>
+      </svg>
+    </div>
+
+    <div class="demo-runner" id="demo-pag">
+      <h4>Try the three strategies</h4>
+      <div>
+        <button class="btn primary" data-scenario="pag-baseline">from+size page 1..999</button>
+        <button class="btn" data-scenario="pag-break">from+size page 600 (break)</button>
+        <button class="btn" data-scenario="pag-sweet">search_after page 1..10000</button>
+        <button class="btn" data-scenario="pag-export">PIT export 1M</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+
+    <div class="callout">
+      <div class="t">Migration path</div>
+      Cap UI at page 500 with a "narrow your filter" nudge; move exports/admin to <code>search_after</code>; keep PIT for consistent snapshots. Never raise <code>index.max_result_window</code>.
+    </div>
+  </section>
+
+  <!-- =============================== REINDEX =============================== -->
+  <section class="page" id="reindex">
+    <h2>es-zero-downtime-reindex-poc <span class="pill">port 8103</span></h2>
+    <p class="sub">Change a mapping on a live index. Don't drop writes. Don't stop reads.</p>
+
+    <div class="diagram">
+      <h4>Alias-swap with dual-write</h4>
+      <svg viewBox="0 0 900 260" width="100%">
+        <!-- alias -->
+        <rect class="box" x="20" y="100" width="140" height="60" rx="8"/>
+        <text x="90" y="130" text-anchor="middle" font-size="13">writes + reads</text>
+        <text x="90" y="148" text-anchor="middle" font-size="11" fill="#8b949e">alias: products</text>
+
+        <!-- v1 -->
+        <rect class="box box-warn" x="230" y="20" width="180" height="70" rx="8"/>
+        <text x="320" y="45" text-anchor="middle" font-size="13">products_v1</text>
+        <text x="320" y="65" text-anchor="middle" font-size="11" fill="#8b949e">current mapping</text>
+        <text x="320" y="82" text-anchor="middle" font-size="10" fill="#8b949e">still serving reads</text>
+
+        <!-- v2 -->
+        <rect class="box box-good" x="230" y="170" width="180" height="70" rx="8"/>
+        <text x="320" y="195" text-anchor="middle" font-size="13">products_v2</text>
+        <text x="320" y="215" text-anchor="middle" font-size="11" fill="#8b949e">new mapping</text>
+        <text x="320" y="232" text-anchor="middle" font-size="10" fill="#8b949e">receiving dual-writes</text>
+
+        <!-- arrow alias to v1 -->
+        <path class="arrow" d="M 160 125 L 230 55"/>
+        <text x="200" y="90" font-size="10" fill="#8b949e">read</text>
+
+        <!-- arrow dual-write both -->
+        <path class="arrow arrow-good" d="M 160 135 L 230 55"/>
+        <path class="arrow arrow-good" d="M 160 135 L 230 205"/>
+        <text x="200" y="140" font-size="10" fill="#3fb950">dual-write (flag on)</text>
+
+        <!-- reindex -->
+        <path class="arrow" d="M 320 90 L 320 170" stroke-dasharray="4,4"/>
+        <text x="335" y="135" font-size="10" fill="#8b949e">_reindex (async)</text>
+
+        <!-- swap -->
+        <rect class="box" x="500" y="100" width="160" height="60" rx="8"/>
+        <text x="580" y="125" text-anchor="middle" font-size="12">atomic _aliases</text>
+        <text x="580" y="145" text-anchor="middle" font-size="11" fill="#8b949e">remove v1 + add v2</text>
+        <path class="arrow" d="M 410 130 L 500 130"/>
+
+        <!-- final -->
+        <rect class="box box-good" x="700" y="100" width="180" height="60" rx="8"/>
+        <text x="790" y="125" text-anchor="middle" font-size="12">alias → v2 only</text>
+        <text x="790" y="145" text-anchor="middle" font-size="11" fill="#8b949e">v1 retained N days for rollback</text>
+        <path class="arrow" d="M 660 130 L 700 130"/>
+      </svg>
+    </div>
+
+    <h3>Failure scenarios covered</h3>
+    <table>
+      <thead><tr><th>Scenario</th><th>Recovery</th></tr></thead>
+      <tbody>
+        <tr><td>Reindex fails mid-run</td><td>v2 partial; do NOT swap; v1 keeps serving. Retrigger to resume.</td></tr>
+        <tr><td>Writes during reindex</td><td>Dual-write catches every delta.</td></tr>
+        <tr><td>Alias swap partial</td><td>Atomic API — either v1 or v2, never zero.</td></tr>
+        <tr><td>New mapping error</td><td>Dual-write throws BEFORE swap → operator aborts safely.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="demo-runner" id="demo-reindex">
+      <h4>Demo — full migration</h4>
+      <div>
+        <button class="btn primary" data-scenario="reindex-start">Start migration</button>
+        <button class="btn" data-scenario="reindex-firehose">Firehose (writes during reindex)</button>
+        <button class="btn" data-scenario="reindex-swap">Atomic alias swap</button>
+        <button class="btn" data-scenario="reindex-rollback">Rollback</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== BULK =============================== -->
+  <section class="page" id="bulk">
+    <h2>es-bulk-indexing-poc <span class="pill">port 8104</span></h2>
+    <p class="sub">Four ingest strategies. Same dataset. 30-100× throughput delta.</p>
+
+    <div class="diagram">
+      <h4>Throughput comparison</h4>
+      <svg viewBox="0 0 800 240" width="100%">
+        <text x="180" y="35" font-size="12" fill="#f85149">single PUT</text>
+        <rect x="180" y="45" width="30" height="20" fill="#f85149" opacity=".7"/>
+        <text x="220" y="60" font-size="11" fill="#8b949e">~320 docs/s</text>
+
+        <text x="180" y="90" font-size="12">bulk (default)</text>
+        <rect x="180" y="100" width="200" height="20" fill="#58a6ff" opacity=".7"/>
+        <text x="390" y="115" font-size="11" fill="#8b949e">~5,400 docs/s</text>
+
+        <text x="180" y="145" font-size="12" fill="#3fb950">bulk-tuned</text>
+        <rect x="180" y="155" width="380" height="20" fill="#3fb950" opacity=".7"/>
+        <text x="570" y="170" font-size="11" fill="#8b949e">~19,600 docs/s (refresh=-1, replicas=0)</text>
+
+        <text x="180" y="200" font-size="12" fill="#3fb950">bulk-parallel</text>
+        <rect x="180" y="210" width="600" height="20" fill="#3fb950"/>
+        <text x="60" y="225" font-size="11" fill="#3fb950">~42,000 docs/s</text>
+      </svg>
+    </div>
+
+    <h3>Why each trick works</h3>
+    <table>
+      <thead><tr><th>Trick</th><th>Effect</th><th>Restore-after risk</th></tr></thead>
+      <tbody>
+        <tr><td><code>refresh_interval=-1</code></td><td>Kills per-second segment churn during load; one final refresh at the end.</td><td>Forget it → invisible writes forever.</td></tr>
+        <tr><td><code>number_of_replicas=0</code></td><td>Halves the write work; replicate from primary at the end.</td><td>Brief durability gap.</td></tr>
+        <tr><td>5-15 MB batches</td><td>Amortize HTTP + JSON overhead.</td><td>>50 MB hits <code>http.max_content_length</code>.</td></tr>
+        <tr><td>Parallelism = node count</td><td>Saturate CPU/disk.</td><td>Over-parallelize → 429 rejections.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="demo-runner" id="demo-bulk">
+      <h4>Run the benchmark (mock)</h4>
+      <div>
+        <button class="btn primary" data-scenario="bulk-all">Load 100k, all 4 strategies</button>
+        <button class="btn" data-scenario="bulk-tuned">Only bulk-parallel, 1M</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== SHARD =============================== -->
+  <section class="page" id="shard">
+    <h2>es-shard-sizing-poc <span class="pill">port 8111</span></h2>
+    <p class="sub">Shard math. ILM rollover. Mapping-explosion guardrails.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4>Rules of thumb</h4>
+        <ul>
+          <li><b>10-50 GB per shard.</b> Smaller wastes overhead; larger slows queries.</li>
+          <li><b>≤ 20 × heap_GB</b> shards per node (primaries + replicas).</li>
+          <li>Don't over-shard small indexes.</li>
+          <li>Time-series → ILM rollover, not fixed count.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4>ILM in plain English</h4>
+        <ul>
+          <li><b>Hot</b>: writes + recent reads. SSDs, replicas=1.</li>
+          <li><b>Warm</b>: force-merged to 1 segment, replicas=0.</li>
+          <li><b>Delete</b>: gone.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="diagram">
+      <h4>Rollover lifecycle</h4>
+      <svg viewBox="0 0 900 200" width="100%">
+        <rect class="box" x="20" y="80" width="120" height="50" rx="6"/>
+        <text x="80" y="110" text-anchor="middle" font-size="12">audit-write alias</text>
+
+        <rect class="box box-hot" x="180" y="20" width="140" height="50" rx="6"/>
+        <text x="250" y="45" text-anchor="middle" font-size="12">audit-000001</text>
+        <text x="250" y="62" text-anchor="middle" font-size="10" fill="#f85149">HOT</text>
+
+        <rect class="box box-hot" x="180" y="80" width="140" height="50" rx="6"/>
+        <text x="250" y="105" text-anchor="middle" font-size="12">audit-000002</text>
+        <text x="250" y="122" text-anchor="middle" font-size="10" fill="#f85149">HOT (active)</text>
+
+        <rect class="box box-warn" x="380" y="20" width="140" height="50" rx="6"/>
+        <text x="450" y="45" text-anchor="middle" font-size="12">audit-000001</text>
+        <text x="450" y="62" text-anchor="middle" font-size="10" fill="#d29922">WARM (rolled)</text>
+
+        <rect class="box" x="580" y="20" width="140" height="50" rx="6"/>
+        <text x="650" y="45" text-anchor="middle" font-size="12">— deleted —</text>
+        <text x="650" y="62" text-anchor="middle" font-size="10" fill="#8b949e">after 30d</text>
+
+        <path class="arrow" d="M 140 105 L 180 105"/>
+        <path class="arrow" d="M 320 45 L 380 45"/>
+        <path class="arrow" d="M 520 45 L 580 45"/>
+        <text x="255" y="15" font-size="10" fill="#8b949e">rollover: size>30GB OR age>7d</text>
+      </svg>
+    </div>
+
+    <div class="demo-runner" id="demo-shard">
+      <h4>Sizing calculator</h4>
+      <div>
+        <button class="btn primary" data-scenario="shard-calc-small">10 GB/day × 30d</button>
+        <button class="btn" data-scenario="shard-calc-big">500 GB/day × 90d</button>
+        <button class="btn" data-scenario="shard-explode">Mapping explosion (1500 keys)</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== RELEVANCE =============================== -->
+  <section class="page" id="relevance">
+    <h2>es-relevance-tuning-poc <span class="pill">port 8106</span></h2>
+    <p class="sub">Two configs. Judged dataset. NDCG@10. Stop shipping blind.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h4>Baseline query</h4>
+        <pre><code>{ "match": { "name": "{q}" } }</code></pre>
+      </div>
+      <div class="card">
+        <h4>Tuned query</h4>
+        <pre><code>{
+  "function_score": {
+    "query": {
+      "multi_match": {
+        "query": "{q}",
+        "fields": ["name^3","brand^2","description"]
+      }
+    },
+    "functions": [{
+      "field_value_factor": {
+        "field": "popularity",
+        "modifier": "log1p"
+      }
+    }],
+    "boost_mode": "multiply"
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="demo-runner" id="demo-rel">
+      <h4>Eval run (mock)</h4>
+      <div>
+        <button class="btn primary" data-scenario="rel-eval">Run eval on 30 judged queries</button>
+        <button class="btn" data-scenario="rel-compare">Compare 'iphone' both configs</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+
+    <div class="callout">
+      <div class="t">What good tuning looks like</div>
+      Change ONE thing. Re-run eval. Compare per-query NDCG (not just the average). A 5% avg lift that tanks 3 queries by 50% is a bad ship.
+    </div>
+  </section>
+
+  <!-- =============================== VIETNAMESE =============================== -->
+  <section class="page" id="vietnamese">
+    <h2>es-vietnamese-search-poc <span class="pill">port 8105</span></h2>
+    <p class="sub">Default analyzer butchers Vietnamese. Three recipes, side by side.</p>
+
+    <table>
+      <thead><tr><th>Index</th><th>Diacritics-insensitive</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td><code>vn_products_standard</code></td><td class="mono" style="color:#f85149">NO (baseline)</td><td>—</td></tr>
+        <tr><td><code>vn_products_folded</code></td><td class="mono" style="color:#3fb950">YES</td><td>Free; built-in <code>asciifolding</code></td></tr>
+        <tr><td><code>vn_products_icu</code></td><td class="mono" style="color:#3fb950">YES</td><td>Requires <code>analysis-icu</code> plugin</td></tr>
+      </tbody>
+    </table>
+
+    <div class="demo-runner" id="demo-vn">
+      <h4>Same query, three analyzers</h4>
+      <div>
+        <button class="btn primary" data-scenario="vn-dien-thoai">"dien thoai" (unaccented)</button>
+        <button class="btn" data-scenario="vn-danang">"Đà Nẵng" (fully accented)</button>
+        <button class="btn" data-scenario="vn-ca-phe">"ca phe"</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== AUTOCOMPLETE =============================== -->
+  <section class="page" id="autocomplete">
+    <h2>es-autocomplete-poc <span class="pill">port 8107</span></h2>
+    <p class="sub">Three techniques. Latency, index size, typo tolerance — all different.</p>
+
+    <table>
+      <thead><tr><th>Strategy</th><th>Latency p50</th><th>Index size</th><th>Typo tolerance</th></tr></thead>
+      <tbody>
+        <tr><td>Edge n-gram</td><td>~5ms</td><td class="mono" style="color:#d29922">3-15×</td><td>via <code>fuzziness</code></td></tr>
+        <tr><td>Completion suggester</td><td class="mono" style="color:#3fb950">~2ms</td><td>1-2×</td><td>built-in fuzzy</td></tr>
+        <tr><td><code>search_as_you_type</code></td><td>~4ms</td><td>2-3×</td><td>via <code>fuzziness</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="t">Rule of thumb</div>
+      Default to <code>search_as_you_type</code>. Upgrade to <code>completion_suggester</code> when you need &lt;5ms p99 on a dedicated suggest field with curated inputs.
+    </div>
+
+    <div class="demo-runner" id="demo-ac">
+      <div>
+        <button class="btn primary" data-scenario="ac-iph">Try "iph"</button>
+        <button class="btn" data-scenario="ac-typo">Typo: "samsng"</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== HYBRID =============================== -->
+  <section class="page" id="hybrid">
+    <h2>es-hybrid-search-poc <span class="pill">port 8109</span></h2>
+    <p class="sub">BM25 + kNN + RRF. The pattern behind every "AI-powered search" since 2024.</p>
+
+    <div class="diagram">
+      <h4>RRF fusion</h4>
+      <svg viewBox="0 0 900 240" width="100%">
+        <rect class="box" x="30" y="90" width="140" height="60" rx="8"/>
+        <text x="100" y="115" text-anchor="middle" font-size="12">query "wireless</text>
+        <text x="100" y="132" text-anchor="middle" font-size="12">charging phone"</text>
+
+        <!-- lexical -->
+        <rect class="box box-warn" x="230" y="20" width="180" height="60" rx="8"/>
+        <text x="320" y="45" text-anchor="middle" font-size="12">BM25 lexical</text>
+        <text x="320" y="63" text-anchor="middle" font-size="10" fill="#8b949e">exact terms, SKUs</text>
+
+        <!-- knn -->
+        <rect class="box box-warn" x="230" y="160" width="180" height="60" rx="8"/>
+        <text x="320" y="185" text-anchor="middle" font-size="12">kNN dense_vector</text>
+        <text x="320" y="203" text-anchor="middle" font-size="10" fill="#8b949e">semantic paraphrase</text>
+
+        <!-- rrf -->
+        <rect class="box box-good" x="500" y="90" width="180" height="60" rx="8"/>
+        <text x="590" y="115" text-anchor="middle" font-size="12">RRF (ES 8.8+)</text>
+        <text x="590" y="132" text-anchor="middle" font-size="10" fill="#8b949e">1/(k + rank) per ranker</text>
+
+        <rect class="box box-good" x="720" y="90" width="150" height="60" rx="8"/>
+        <text x="795" y="115" text-anchor="middle" font-size="12">top N</text>
+        <text x="795" y="132" text-anchor="middle" font-size="10" fill="#8b949e">to user</text>
+
+        <path class="arrow" d="M 170 110 L 230 50"/>
+        <path class="arrow" d="M 170 130 L 230 190"/>
+        <path class="arrow" d="M 410 50 L 500 110"/>
+        <path class="arrow" d="M 410 190 L 500 130"/>
+        <path class="arrow arrow-good" d="M 680 120 L 720 120"/>
+      </svg>
+    </div>
+
+    <div class="demo-runner" id="demo-hyb">
+      <h4>Compare three retrievers on the same query</h4>
+      <div>
+        <button class="btn primary" data-scenario="hyb-wireless">"wireless charging phone"</button>
+        <button class="btn" data-scenario="hyb-sku">"RTX 4090" (lexical wins)</button>
+        <button class="btn" data-scenario="hyb-semantic">"something to make coffee" (kNN wins)</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+
+    <div class="callout warn">
+      <div class="t">Honest caveats</div>
+      kNN is RAM-heavy (4× raw vector size on-heap). Re-embedding on model change is expensive. Don't ship kNN-only search — SKU search regresses without BM25.
+    </div>
+  </section>
+
+  <!-- =============================== FACET =============================== -->
+  <section class="page" id="facet">
+    <h2>es-faceted-search-poc <span class="pill">port 8108</span></h2>
+    <p class="sub">Multi-select sidebar filters that update counts correctly.</p>
+
+    <div class="callout">
+      <div class="t">The trick</div>
+      <code>post_filter</code> filters the hits *after* aggs run, so aggs see the full set. Per-facet <code>filter</code> aggs re-apply the selection to <b>only the non-selected facets</b> so their counts reflect "if I applied this".
+    </div>
+
+    <div class="diagram">
+      <h4>Aggregation scope</h4>
+      <svg viewBox="0 0 900 220" width="100%">
+        <rect class="box" x="20" y="80" width="140" height="60" rx="8"/>
+        <text x="90" y="105" text-anchor="middle" font-size="12">query "phone"</text>
+        <text x="90" y="123" text-anchor="middle" font-size="10" fill="#8b949e">no filter here</text>
+
+        <rect class="box box-good" x="200" y="20" width="180" height="60" rx="8"/>
+        <text x="290" y="45" text-anchor="middle" font-size="12">brand agg</text>
+        <text x="290" y="62" text-anchor="middle" font-size="10" fill="#8b949e">SEES all brands (unfiltered)</text>
+
+        <rect class="box box-warn" x="200" y="90" width="180" height="60" rx="8"/>
+        <text x="290" y="115" text-anchor="middle" font-size="12">category agg</text>
+        <text x="290" y="133" text-anchor="middle" font-size="10" fill="#8b949e">filter: brand=Apple</text>
+
+        <rect class="box box-warn" x="200" y="160" width="180" height="50" rx="8"/>
+        <text x="290" y="182" text-anchor="middle" font-size="12">price / rating aggs</text>
+        <text x="290" y="200" text-anchor="middle" font-size="10" fill="#8b949e">filter: brand=Apple</text>
+
+        <rect class="box box-hot" x="450" y="80" width="160" height="60" rx="8"/>
+        <text x="530" y="105" text-anchor="middle" font-size="12">post_filter</text>
+        <text x="530" y="123" text-anchor="middle" font-size="10" fill="#f85149">brand=Apple</text>
+
+        <rect class="box" x="680" y="80" width="180" height="60" rx="8"/>
+        <text x="770" y="105" text-anchor="middle" font-size="12">hits (Apple only)</text>
+        <text x="770" y="123" text-anchor="middle" font-size="10" fill="#8b949e">+ facet counts to render</text>
+
+        <path class="arrow" d="M 160 110 L 200 50"/>
+        <path class="arrow" d="M 160 110 L 200 120"/>
+        <path class="arrow" d="M 160 110 L 200 185"/>
+        <path class="arrow" d="M 380 110 L 450 110"/>
+        <path class="arrow" d="M 610 110 L 680 110"/>
+      </svg>
+    </div>
+
+    <div class="demo-runner" id="demo-facet">
+      <div>
+        <button class="btn primary" data-scenario="facet-none">No filters</button>
+        <button class="btn" data-scenario="facet-brand">brand=Apple</button>
+        <button class="btn" data-scenario="facet-multi">brand=Apple + minRating=4</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== OBS =============================== -->
+  <section class="page" id="observability">
+    <h2>es-observability-poc <span class="pill">port 8112</span></h2>
+    <p class="sub">When search is slow, don't guess. Use the tools.</p>
+
+    <table>
+      <thead><tr><th>Endpoint</th><th>Wraps</th><th>Use when</th></tr></thead>
+      <tbody>
+        <tr><td><code>/admin/slowlog</code></td><td><code>PUT index/_settings</code></td><td>Turn slow log on for an index in incident response</td></tr>
+        <tr><td><code>/admin/hot-threads</code></td><td><code>_nodes/hot_threads</code></td><td>"Node's CPU pinned — what threads?"</td></tr>
+        <tr><td><code>/admin/profile?q=</code></td><td><code>_search?profile=true</code></td><td>"One query is slow, where's the time?"</td></tr>
+        <tr><td><code>/admin/diagnose</code></td><td>composite</td><td>One-shot cluster snapshot</td></tr>
+      </tbody>
+    </table>
+
+    <div class="demo-runner" id="demo-obs">
+      <div>
+        <button class="btn primary" data-scenario="obs-firehose">Induce leading-wildcard load</button>
+        <button class="btn" data-scenario="obs-hot">hot_threads</button>
+        <button class="btn" data-scenario="obs-profile">profile a query</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== GOTCHAS =============================== -->
+  <section class="page" id="gotchas">
+    <h2>es-gotchas-poc <span class="pill">port 8113</span></h2>
+    <p class="sub">Six defaults-are-wrong bugs. Each has <code>/break</code>, <code>/explain</code>, <code>/fix</code>.</p>
+
+    <table>
+      <thead><tr><th>Gotcha</th><th>Pitfall</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td><code>mapping-explosion</code></td><td>Dynamic mapping inflates field count</td><td><code>dynamic: false</code> + <code>flattened</code></td></tr>
+        <tr><td><code>fielddata-oom</code></td><td>Sort/agg on a <code>text</code> field</td><td><code>.keyword</code> multi-field</td></tr>
+        <tr><td><code>id-collision</code></td><td>Same <code>_id</code> silently overwrites</td><td><code>op_type: create</code> or <code>version_type: external</code></td></tr>
+        <tr><td><code>wildcard-prefix</code></td><td>Leading-wildcard scans entire term dict</td><td>Index n-grams; query with <code>match</code></td></tr>
+        <tr><td><code>refresh-too-aggressive</code></td><td>Default 1s refresh during bulk load</td><td><code>refresh_interval=-1</code> during load, restore after</td></tr>
+        <tr><td><code>heap-too-big</code></td><td>JVM heap > ~32 GB loses compressed oops</td><td>Cap at 30 GB; two ES nodes per host</td></tr>
+      </tbody>
+    </table>
+
+    <div class="demo-runner" id="demo-got">
+      <h4>Trigger a gotcha</h4>
+      <div>
+        <button class="btn" data-scenario="got-mapping">mapping-explosion</button>
+        <button class="btn" data-scenario="got-fielddata">fielddata-oom</button>
+        <button class="btn" data-scenario="got-id">id-collision</button>
+        <button class="btn" data-scenario="got-wildcard">wildcard-prefix</button>
+      </div>
+      <div class="out" data-out></div>
+    </div>
+  </section>
+
+  <!-- =============================== SCALING =============================== -->
+  <section class="page" id="scaling">
+    <h2>Scaling: k8s pods &amp; VMs</h2>
+    <p class="sub">The POCs assume one JVM. Here's what breaks when you run N. Full detail in <a href="./CONSISTENCY.md">CONSISTENCY.md</a>.</p>
+
+    <div class="diagram">
+      <h4>Topology</h4>
+      <svg viewBox="0 0 900 300" width="100%">
+        <rect class="box" x="340" y="20" width="220" height="50" rx="6"/>
+        <text x="450" y="50" text-anchor="middle" font-size="12">k8s Service / LB (round-robin)</text>
+
+        <rect class="box" x="120" y="110" width="140" height="60" rx="8"/>
+        <text x="190" y="140" text-anchor="middle" font-size="12">pod-1</text>
+        <text x="190" y="158" text-anchor="middle" font-size="10" fill="#8b949e">outbox poller?</text>
+
+        <rect class="box" x="340" y="110" width="140" height="60" rx="8"/>
+        <text x="410" y="140" text-anchor="middle" font-size="12">pod-2</text>
+        <text x="410" y="158" text-anchor="middle" font-size="10" fill="#8b949e">outbox poller?</text>
+
+        <rect class="box" x="560" y="110" width="140" height="60" rx="8"/>
+        <text x="630" y="140" text-anchor="middle" font-size="12">pod-3</text>
+        <text x="630" y="158" text-anchor="middle" font-size="10" fill="#8b949e">outbox poller?</text>
+
+        <path class="arrow" d="M 400 70 L 190 110"/>
+        <path class="arrow" d="M 450 70 L 410 110"/>
+        <path class="arrow" d="M 500 70 L 630 110"/>
+
+        <rect class="box box-warn" x="80" y="220" width="220" height="60" rx="8"/>
+        <text x="190" y="245" text-anchor="middle" font-size="12">Postgres (primary)</text>
+        <text x="190" y="263" text-anchor="middle" font-size="10" fill="#8b949e">advisory lock, WAL</text>
+
+        <rect class="box box-good" x="340" y="220" width="220" height="60" rx="8"/>
+        <text x="450" y="245" text-anchor="middle" font-size="12">Elasticsearch (3-node)</text>
+        <text x="450" y="263" text-anchor="middle" font-size="10" fill="#8b949e">shard-distributed</text>
+
+        <rect class="box" x="600" y="220" width="220" height="60" rx="8"/>
+        <text x="710" y="245" text-anchor="middle" font-size="12">Kafka / Redis</text>
+        <text x="710" y="263" text-anchor="middle" font-size="10" fill="#8b949e">shared state</text>
+
+        <path class="arrow" d="M 190 170 L 190 220"/>
+        <path class="arrow" d="M 410 170 L 450 220"/>
+        <path class="arrow" d="M 630 170 L 710 220"/>
+      </svg>
+    </div>
+
+    <h3>The seven landmines</h3>
+    <table>
+      <thead><tr><th>#</th><th>Landmine</th><th>Fix summary</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Multiple outbox pollers racing on the same rows</td><td><code>pg_try_advisory_lock</code> or <code>FOR UPDATE SKIP LOCKED</code></td></tr>
+        <tr><td>2</td><td>Dual-write / migration flag in JVM memory</td><td>Move to Redis or <code>migration_state</code> table</td></tr>
+        <tr><td>3</td><td>Reindex triggered N times in parallel</td><td>Claim (Redis <code>SET NX</code> or Postgres conditional UPDATE)</td></tr>
+        <tr><td>4</td><td>PIT / <code>search_after</code> cursors</td><td>Already pod-safe — client-carried</td></tr>
+        <tr><td>5</td><td>Read-your-writes freshness stuck on one pod</td><td>Redis flag with 2s TTL</td></tr>
+        <tr><td>6</td><td>Kafka consumer group / partition math wrong</td><td><code>partitions ≥ pods</code>, key = entity ID</td></tr>
+        <tr><td>7</td><td>Bulk-load settings toggled per-pod</td><td>Do it from a k8s Job or leader-only</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Consistency-vs-latency tradeoff</h3>
+    <table>
+      <thead><tr><th>Pattern</th><th>Sync guarantee</th><th>Extra latency</th></tr></thead>
+      <tbody>
+        <tr><td>Outbox + SKIP LOCKED</td><td>Eventual, seconds</td><td>0 in write path</td></tr>
+        <tr><td>CDC (Debezium)</td><td>Eventual, sub-second</td><td>0 in write path</td></tr>
+        <tr><td><code>refresh=wait_for</code></td><td>Read-your-writes (writer)</td><td>up to 1s per write</td></tr>
+        <tr><td>Redis freshness flag</td><td>Read-your-writes (any pod)</td><td>+1 Redis RTT per read</td></tr>
+        <tr><td>DB read-through</td><td>Read-your-writes (client hint)</td><td>+1 DB RTT on miss</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <div class="t">Suite recommendation</div>
+      <b>Outbox + SKIP LOCKED</b> for writes • <b><code>refresh=wait_for</code> + Redis freshness flag</b> for user-facing reads • <b>CDC</b> only when the ops team is comfortable owning it.
+    </div>
+  </section>
+</main>
+
+<footer>
+  Static walkthrough — no backend required. All demo outputs are illustrative, mimicking what the real POCs print when you run them.
+  <br>Full docs: <a href="./ISSUE.md">ISSUE.md</a> · <a href="./TECHNICAL.md">TECHNICAL.md</a> · <a href="./CONSISTENCY.md">CONSISTENCY.md</a> · <a href="./README.md">README</a>
+</footer>
+
+<script>
+  // Navigation
+  const navItems = document.querySelectorAll('.navitem');
+  const pages = document.querySelectorAll('.page');
+  function show(id) {
+    pages.forEach(p => p.classList.toggle('active', p.id === id));
+    navItems.forEach(a => a.classList.toggle('active', a.dataset.page === id));
+    window.scrollTo({top:0, behavior:'instant'});
+  }
+  navItems.forEach(a => a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.page); }));
+  document.querySelectorAll('[data-goto]').forEach(a =>
+    a.addEventListener('click', e => { e.preventDefault(); show(a.dataset.goto); }));
+  show('overview');
+
+  // ---- Mock scenarios ----
+  // Each scenario prints a plausible trace of what the POC would output when hit
+  // via demo.ps1 or curl. Not a real network call — a scripted walkthrough.
+  const scenarios = {
+    // --- sync ---
+    'sync-happy': [
+      ['dim',  'POST /api/v1/sync/naive/products     (dual-write)'],
+      ['ok',   '  → Postgres.sync_naive.products id=42 committed'],
+      ['ok',   '  → ES products_naive doc=42 indexed  (took 6ms)'],
+      ['dim',  'POST /api/v1/sync/outbox/products    (outbox)'],
+      ['ok',   '  → Postgres.sync_outbox.products id=42 + outbox row id=100 committed (same tx)'],
+      ['ok',   '  → OutboxPoller flushed 1 row → Kafka topic sync.products.changes'],
+      ['ok',   '  → Indexer consumed offset=99 → ES products_outbox id=42 (version 1700000010000)'],
+      ['dim',  'POST /api/v1/sync/cdc/products       (Debezium)'],
+      ['ok',   '  → Postgres.sync_cdc.products id=42 committed  (LSN 0/1B2A400)'],
+      ['ok',   '  → Debezium engine captured change, published to Kafka'],
+      ['ok',   '  → ES products_cdc id=42 (lag: 380ms)'],
+      ['dim',  '— all three strategies converged.'],
+    ],
+    'sync-drift': [
+      ['warn', 'POST /api/v1/sync/naive/products    -H "X-Inject-Failure: es-fail"'],
+      ['ok',   '  → Postgres.sync_naive.products id=42 COMMITTED'],
+      ['err',  '  ✗ ES call threw IOException — but the DB transaction had already committed'],
+      ['err',  '  ! DRIFT: PG has id=42, ES products_naive is missing it. FOREVER.'],
+      ['dim',  ''],
+      ['warn', 'POST /api/v1/sync/outbox/products   -H "X-Inject-Failure: es-fail"'],
+      ['ok',   '  → PG + outbox committed atomically'],
+      ['warn', '  → OutboxPoller fetched 1 row → Kafka OK'],
+      ['warn', '  → Indexer consumed → ES threw. Offset NOT committed. Row stays in flight.'],
+      ['ok',   '  → 3s later ES recovers. Indexer retries. products_outbox id=42 present.'],
+      ['dim',  '— dual-write drifts; outbox self-heals.'],
+    ],
+    'sync-outbox-kill': [
+      ['dim',  'POST /admin/outbox/poller/pause'],
+      ['ok',   '  → poller paused'],
+      ['dim',  'Send 10 writes via /api/v1/sync/outbox/products'],
+      ['ok',   '  → PG has 10 rows, outbox_event has 10 rows, ES has 0'],
+      ['dim',  'GET /admin/outbox/stats'],
+      ['warn', '  → { pending: 10, oldestAgeSec: 8 }'],
+      ['dim',  'POST /admin/outbox/poller/resume'],
+      ['ok',   '  → OutboxPoller drained 10 rows → Kafka'],
+      ['ok',   '  → Indexer wrote 10 docs to ES products_outbox'],
+      ['ok',   '  → { pending: 0, oldestAgeSec: 0 }  — caught up.'],
+    ],
+    // --- consistency ---
+    'cons-default': [
+      ['warn', 'POST /api/v1/products?mode=default'],
+      ['ok',   '  → id=abc created (write 5ms)'],
+      ['dim',  'GET  /api/v1/products/abc/search (immediately)'],
+      ['err',  '  ✗ 0 hits — ES refresh has not run yet (~1s window)'],
+      ['dim',  'GET again 1.2s later'],
+      ['ok',   '  ✓ 1 hit'],
+      ['dim',  '— the race, on purpose.'],
+    ],
+    'cons-waitfor': [
+      ['dim',  'POST /api/v1/products?mode=wait-for'],
+      ['warn', '  → refresh=wait_for  (took 830ms — held until next refresh)'],
+      ['ok',   '  → id=abc created'],
+      ['ok',   'GET /api/v1/products/abc/search → 1 hit immediately'],
+    ],
+    'cons-readthrough': [
+      ['dim',  'POST /api/v1/products?mode=default'],
+      ['ok',   '  → id=abc created (5ms)'],
+      ['dim',  'GET /api/v1/products/abc?mode=read-through'],
+      ['warn', '  → ES miss'],
+      ['ok',   '  → fell back to Postgres, returned product'],
+      ['ok',   '  → back-filled ES asynchronously'],
+    ],
+    'cons-version': [
+      ['dim',  'Sending 3 writes for id=abc, out of order:'],
+      ['ok',   '  1) version 1700000000000  → OK'],
+      ['warn', '  2) version 1699999990000  → 409 version_conflict (older, rejected)'],
+      ['ok',   '  3) version 1700000010000  → OK (newer, replaces)'],
+      ['dim',  'Final ES state: version=1700000010000. No flip-flop.'],
+    ],
+    // --- pagination ---
+    'pag-baseline': [
+      ['ok',   'GET /api/v1/products/page?page=1    → 20 items, tookMs=4'],
+      ['ok',   'GET /api/v1/products/page?page=100  → 20 items, tookMs=11'],
+      ['warn', 'GET /api/v1/products/page?page=500  → 20 items, tookMs=58'],
+      ['warn', 'GET /api/v1/products/page?page=999  → 20 items, tookMs=212'],
+      ['dim',  '— latency grows with from. On a multi-shard cluster, multiply by shard count.'],
+    ],
+    'pag-break': [
+      ['err',  'GET /api/v1/products/page?page=600&size=20'],
+      ['err',  '  HTTP 400: Result window is too large, from + size must be ≤ [10000]'],
+      ['dim',  '— ES protects itself. Raising max_result_window just postpones the cliff.'],
+    ],
+    'pag-sweet': [
+      ['ok',   'GET /api/v1/products/scroll?size=20               → tookMs=5'],
+      ['ok',   'GET /api/v1/products/scroll?cursor=...&size=20    → tookMs=5'],
+      ['ok',   '  ... page 100                                    → tookMs=5'],
+      ['ok',   '  ... page 1000                                   → tookMs=5'],
+      ['ok',   '  ... page 10000                                  → tookMs=5'],
+      ['dim',  '— flat. search_after walks the sort order; no skip cost.'],
+    ],
+    'pag-export': [
+      ['dim',  'POST /api/v1/products/export     (opens PIT)'],
+      ['ok',   '  → PIT id acquired, keep_alive=5m'],
+      ['ok',   '  → chunk 1..500  written (tookMs=8)'],
+      ['ok',   '  → chunk 501..1000 written (tookMs=7)'],
+      ['dim',  '  ... 2000 chunks later ...'],
+      ['ok',   '  → 1,000,000 docs exported in 2.54s'],
+      ['ok',   '  → PIT closed'],
+      ['dim',  '— consistent snapshot even under concurrent writes.'],
+    ],
+    // --- reindex ---
+    'reindex-start': [
+      ['dim',  'POST /admin/migration/start'],
+      ['ok',   '  → products_v2 created (new mapping: description with english stemmer)'],
+      ['ok',   '  → dual-write flag ON — writes go to both v1 and v2'],
+      ['ok',   '  → _reindex task started: taskId=Nn9x...:12345'],
+      ['dim',  'GET /admin/migration/status → { step: REINDEXING, progress: 47% }'],
+    ],
+    'reindex-firehose': [
+      ['dim',  'Firehose: ~50 writes/sec via /api/v1/products'],
+      ['ok',   '  → each write hits v1 AND v2 (dual-write)'],
+      ['ok',   '  → GET /api/v1/products/count returns identical values on v1 and v2'],
+      ['ok',   '  → 0 failed writes over the migration window'],
+    ],
+    'reindex-swap': [
+      ['dim',  'POST /admin/migration/swap'],
+      ['ok',   '  → POST /_aliases { remove:products→v1, add:products→v2 }  (atomic, took 3ms)'],
+      ['ok',   '  → dual-write flag OFF'],
+      ['ok',   '  → GET /api/v1/products/search?q=run → hits "running", "ran", "runs" via stemmer'],
+      ['dim',  '  v1 retained for rollback window; delete after 7d via /admin/migration/v1'],
+    ],
+    'reindex-rollback': [
+      ['warn', 'POST /admin/migration/rollback'],
+      ['ok',   '  → alias swapped back: products→v1  (atomic, took 3ms)'],
+      ['ok',   '  → dual-write flag ON (catching writes into v2 for the next attempt)'],
+      ['dim',  '— v1 untouched throughout; users notice nothing.'],
+    ],
+    // --- bulk ---
+    'bulk-all': [
+      ['dim',  'POST /api/v1/bulk/reset'],
+      ['dim',  'POST /api/v1/bulk/run?strategy=single&count=100000'],
+      ['err',  '  single         100000 docs in 312.0s   →     320 docs/sec'],
+      ['dim',  'POST /api/v1/bulk/run?strategy=bulk-default&count=100000'],
+      ['warn', '  bulk-default   100000 docs in  18.5s   →   5,405 docs/sec  (17× vs single)'],
+      ['dim',  'POST /api/v1/bulk/run?strategy=bulk-tuned&count=100000'],
+      ['ok',   '  bulk-tuned     100000 docs in   5.1s   →  19,608 docs/sec  (61× vs single)'],
+      ['dim',  'POST /api/v1/bulk/run?strategy=bulk-parallel&count=100000'],
+      ['ok',   '  bulk-parallel  100000 docs in   2.4s   →  41,667 docs/sec (130× vs single)'],
+    ],
+    'bulk-tuned': [
+      ['dim',  'POST /api/v1/bulk/run?strategy=bulk-parallel&count=1000000&parallelism=4'],
+      ['ok',   '  refresh_interval=-1, number_of_replicas=0 applied'],
+      ['ok',   '  loaded 1,000,000 docs in 24.3s → 41,152 docs/sec'],
+      ['ok',   '  restoring refresh_interval=1s, replicas=1'],
+      ['ok',   '  POST /index/_forcemerge?max_num_segments=1 (took 8.2s)'],
+      ['dim',  '— restore step is what most naive scripts forget.'],
+    ],
+    // --- shard ---
+    'shard-calc-small': [
+      ['dim',  'GET /api/v1/sizing/calculator?dailyGb=10&retentionDays=30&targetShardGb=30'],
+      ['ok',   '  totalGb = 300'],
+      ['ok',   '  recommendedPrimaryShardsPerIndex = 1  (well under 30 GB target)'],
+      ['ok',   '  rolloverAt = { size: 30GB OR age: 7d }'],
+      ['ok',   '  perNodeShardBudget: OK (< 20 × heap_GB)'],
+    ],
+    'shard-calc-big': [
+      ['dim',  'GET /api/v1/sizing/calculator?dailyGb=500&retentionDays=90&targetShardGb=30'],
+      ['warn', '  totalGb = 45000'],
+      ['warn', '  recommendedPrimaryShardsPerIndex = 17'],
+      ['warn', '  → ILM rollover strongly advised; do NOT put 90d in one index'],
+      ['ok',   '  Recommended shape: rolling daily indexes, hot 7d / warm 30d / cold 60d / delete 90d'],
+    ],
+    'shard-explode': [
+      ['warn', 'POST /api/v1/sizing/explode-mapping?keys=1500'],
+      ['ok',   '  → fields written 1..1000'],
+      ['err',  '  ✗ ES: Limit of total fields [1000] in index has been exceeded'],
+      ['dim',  'POST /api/v1/sizing/explode-mapping/fix'],
+      ['ok',   '  → recreated index with `properties: { type: "flattened" }`'],
+      ['ok',   '  → same input, single mapping field; cluster state stable.'],
+    ],
+    // --- relevance ---
+    'rel-eval': [
+      ['dim',  'GET /api/v1/eval/run'],
+      ['ok',   '  config=baseline  NDCG@10 = 0.412   MRR = 0.481'],
+      ['ok',   '  config=tuned     NDCG@10 = 0.687   MRR = 0.712   (+66% / +48%)'],
+      ['dim',  '  Per-query wins: 26/30. Per-query regressions: 2 (both minor).'],
+      ['warn', '  Query "generic phone" — tuned worse by 0.12 NDCG.  Investigate: popularity term may be over-weighted.'],
+    ],
+    'rel-compare': [
+      ['dim',  'baseline → iphone'],
+      ['dim',  '  1. iPhone Case Slim (name match, popularity=low)'],
+      ['dim',  '  2. iPhone 15 Pro (name match)'],
+      ['dim',  '  3. Apple iPhone Charger'],
+      ['dim',  'tuned → iphone'],
+      ['ok',   '  1. iPhone 15 Pro (name^3 + popularity)'],
+      ['ok',   '  2. iPhone 15 (name^3 + popularity)'],
+      ['ok',   '  3. iPhone 14 Pro Max'],
+      ['dim',  '— the intent-relevant hit rises to rank 1.'],
+    ],
+    // --- VN ---
+    'vn-dien-thoai': [
+      ['dim',  'GET /api/v1/products/compare?q=dien thoai'],
+      ['err',  '  vn_products_standard   →   0 hits'],
+      ['ok',   '  vn_products_folded     → 128 hits'],
+      ['ok',   '  vn_products_icu        → 128 hits (slightly different scoring)'],
+    ],
+    'vn-danang': [
+      ['dim',  'GET /api/v1/products/compare?q=Đà Nẵng'],
+      ['ok',   '  standard →  42 hits'],
+      ['ok',   '  folded   →  42 hits'],
+      ['ok',   '  icu      →  42 hits'],
+      ['dim',  '— fully-accented query matches everywhere; the folding helps only with unaccented input.'],
+    ],
+    'vn-ca-phe': [
+      ['dim',  'GET /api/v1/products/compare?q=ca phe'],
+      ['err',  '  standard → 0 hits'],
+      ['ok',   '  folded   → 61 hits ("cà phê", "Cà Phê", "CÀ PHÊ" all normalize)'],
+      ['ok',   '  icu      → 61 hits'],
+    ],
+    // --- AC ---
+    'ac-iph': [
+      ['dim',  'GET /api/v1/suggest/{strategy}?q=iph'],
+      ['ok',   '  ngram      → [iPhone 15, iPhone Case, iPhone 15 Pro]  (5ms)'],
+      ['ok',   '  completion → [iPhone 15 Pro, iPhone 15, iPhone Case] (2ms) ← preranked by weight'],
+      ['ok',   '  sayt       → [iPhone 15, iPhone 15 Pro, iPhone Case]  (4ms)'],
+    ],
+    'ac-typo': [
+      ['dim',  'GET /api/v1/suggest/{strategy}?q=samsng'],
+      ['warn', '  ngram      → [] (needs fuzziness param)'],
+      ['ok',   '  completion → [Samsung Galaxy S24, Samsung TV] with fuzzy=AUTO'],
+      ['ok',   '  sayt       → [Samsung Galaxy S24] with fuzziness=AUTO'],
+    ],
+    // --- Hybrid ---
+    'hyb-wireless': [
+      ['dim',  'q = "wireless charging phone"'],
+      ['dim',  '  lexical top-3: [Anker Wireless Charger, iPhone 15 Pro, Samsung S24]'],
+      ['dim',  '  kNN   top-3: [iPhone 15 Pro (Qi), Pixel 8 Pro (Qi), Samsung S24 (Qi)]'],
+      ['ok',   '  hybrid (RRF k=60): [iPhone 15 Pro, Samsung S24, Pixel 8 Pro, Anker Wireless Charger]'],
+      ['dim',  '  — both strong signals fuse; the phones (intended) beat the accessory.'],
+    ],
+    'hyb-sku': [
+      ['dim',  'q = "RTX 4090"'],
+      ['ok',   '  lexical: [RTX 4090 Founders Edition, RTX 4090 Ti (rumored), RTX 4090 mount]'],
+      ['warn', '  kNN:     [RTX 4080, RTX 3090, RTX 4070] ← semantic drift'],
+      ['ok',   '  hybrid:  [RTX 4090 Founders Edition, RTX 4090 Ti (rumored), RTX 4090 mount]'],
+      ['dim',  '  — lexical dominates; RRF respects that because BM25 has all 3 at top.'],
+    ],
+    'hyb-semantic': [
+      ['dim',  'q = "something to make coffee"'],
+      ['err',  '  lexical: [] (no term "coffee" matched)'],
+      ['ok',   '  kNN:     [Espresso Machine, French Press, Moka Pot]'],
+      ['ok',   '  hybrid:  [Espresso Machine, French Press, Moka Pot]'],
+      ['dim',  '  — kNN wins uncontested when the user\'s vocab differs from the catalog\'s.'],
+    ],
+    // --- Facet ---
+    'facet-none': [
+      ['dim',  'GET /api/v1/products/search'],
+      ['ok',   '  totalHits: 10000'],
+      ['ok',   '  facets.brand:    [Apple: 320, Samsung: 480, Google: 210, ...]'],
+      ['ok',   '  facets.category: [electronics: 6200, home: 2100, ...]'],
+      ['ok',   '  facets.price:    [0-50: 1300, 50-200: 3500, ...]'],
+    ],
+    'facet-brand': [
+      ['dim',  'GET /api/v1/products/search?brand=Apple'],
+      ['ok',   '  totalHits: 320'],
+      ['ok',   '  facets.brand:    [Apple: 320, Samsung: 480, Google: 210, ...]  ← unchanged'],
+      ['ok',   '  facets.category: [electronics: 260, accessories: 60]           ← scoped to Apple'],
+      ['ok',   '  facets.price:    [200-1000: 180, 50-200: 100, ...]             ← scoped to Apple'],
+      ['dim',  '  — brand facet still shows all brands (so user can switch).'],
+    ],
+    'facet-multi': [
+      ['dim',  'GET /api/v1/products/search?brand=Apple&minRating=4'],
+      ['ok',   '  totalHits: 245'],
+      ['ok',   '  facets.brand:  scoped by minRating=4 only  → other brands still visible'],
+      ['ok',   '  facets.rating: scoped by brand=Apple only  → all rating buckets visible'],
+      ['ok',   '  facets.category: scoped by BOTH filters'],
+    ],
+    // --- Obs ---
+    'obs-firehose': [
+      ['warn', 'demo.ps1 firehose-bad — 100 concurrent leading-wildcard queries'],
+      ['warn', '  {wildcard: {name: "*phone*"}} × 100'],
+      ['err',  '  Node CPU 92%. Coordinator queue backing up.'],
+    ],
+    'obs-hot': [
+      ['dim',  'GET /admin/hot-threads'],
+      ['dim',  '  Node espoc-es-node-1 — 3 hot threads:'],
+      ['dim',  '  87% cpu — org.apache.lucene.search.MultiTermQueryConstantScoreWrapper'],
+      ['dim',  '  84% cpu — org.elasticsearch.index.query.WildcardQueryBuilder'],
+      ['ok',   '  → verdict: wildcard rewrite is scanning term dictionaries.'],
+    ],
+    'obs-profile': [
+      ['dim',  'GET /admin/profile?q=*phone*'],
+      ['dim',  '  breakdown per shard:'],
+      ['warn', '    wildcard rewrite: 1,240,000,000 ns (99% of query time)'],
+      ['warn', '    match_count: 12,400   (of 100,000 docs scanned)'],
+      ['ok',   '  → fix: index n-grams; use match on name_ngram.'],
+    ],
+    // --- Gotchas ---
+    'got-mapping': [
+      ['warn', 'POST /api/v1/gotcha/mapping-explosion/break?keys=1500'],
+      ['err',  '  after 1000: Limit of total fields [1000] in index has been exceeded'],
+      ['dim',  'POST /api/v1/gotcha/mapping-explosion/fix'],
+      ['ok',   '  → new index with dynamic:false + flattened property'],
+      ['ok',   '  → 1500 keys ingested. Total mapping fields: 3.'],
+    ],
+    'got-fielddata': [
+      ['warn', 'POST /api/v1/gotcha/fielddata-oom/break'],
+      ['err',  '  sort on text field "name" → fielddata loaded → JVM heap +180MB'],
+      ['dim',  'POST /api/v1/gotcha/fielddata-oom/fix'],
+      ['ok',   '  → index recreated with name.keyword sub-field'],
+      ['ok',   '  → sort on name.keyword — no fielddata; heap flat.'],
+    ],
+    'got-id': [
+      ['warn', 'POST /api/v1/gotcha/id-collision/break'],
+      ['ok',   '  index id=42 { name: "A" }'],
+      ['warn', '  index id=42 { name: "B" }  ← older content resumed from checkpoint'],
+      ['err',  '  final: name="B"  (silent overwrite; A is gone)'],
+      ['dim',  'POST /api/v1/gotcha/id-collision/fix'],
+      ['ok',   '  version_type=external, version=updatedAtMillis'],
+      ['ok',   '  older write rejected with 409 version_conflict — newer stands.'],
+    ],
+    'got-wildcard': [
+      ['warn', 'POST /api/v1/gotcha/wildcard-prefix/break?term=phone'],
+      ['err',  '  wildcard: "*phone*" took=2140ms'],
+      ['dim',  'POST /api/v1/gotcha/wildcard-prefix/fix?term=phone'],
+      ['ok',   '  match on n-gram-indexed name_ngram took=8ms'],
+    ],
+  };
+
+  document.querySelectorAll('[data-scenario]').forEach(btn =>
+    btn.addEventListener('click', e => {
+      const key = btn.dataset.scenario;
+      const container = btn.closest('.demo-runner');
+      const out = container.querySelector('[data-out]');
+      out.innerHTML = '';
+      const lines = scenarios[key] || [['dim','(no mock output for this scenario)']];
+      let i = 0;
+      const step = () => {
+        if (i >= lines.length) return;
+        const [cls, text] = lines[i++];
+        const span = document.createElement('span');
+        span.className = 'line ' + cls;
+        span.textContent = text;
+        out.appendChild(span);
+        out.scrollTop = out.scrollHeight;
+        setTimeout(step, 80);
+      };
+      step();
+    }));
+</script>
+</body>
+</html>

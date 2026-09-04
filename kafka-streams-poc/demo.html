@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kafka Streams POC — Flow Explainer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1220;
+    --panel: #171a2b;
+    --panel-2: #1e2238;
+    --ink: #e8ecff;
+    --ink-dim: #a4acd6;
+    --accent: #6ee7ff;
+    --accent-2: #b48cff;
+    --warn: #ffb86b;
+    --ok: #7ee8a2;
+    --bad: #ff7a90;
+    --stroke: #2a2f4a;
+    --code: #0b0d19;
+    --shadow: 0 8px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: linear-gradient(180deg, #0b0e1a 0%, #0f1220 100%);
+    color: var(--ink); font: 15px/1.55 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    padding: 28px 32px 12px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  header h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -.01em; }
+  header .sub { color: var(--ink-dim); }
+  nav.tabs {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    max-width: 1200px; margin: 12px auto 0; padding: 0 32px;
+  }
+  nav.tabs button {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--stroke);
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+    transition: all .15s;
+  }
+  nav.tabs button.active {
+    background: var(--accent); color: #0b0d19; border-color: var(--accent);
+  }
+  nav.tabs button:hover:not(.active) { background: var(--panel-2); }
+
+  main { max-width: 1200px; margin: 20px auto; padding: 0 32px 80px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px;
+    padding: 20px; margin-bottom: 18px; box-shadow: var(--shadow);
+  }
+  .card h2 { margin: 0 0 8px; font-size: 18px; }
+  .card h3 { margin: 20px 0 8px; font-size: 15px; color: var(--accent); }
+  .card p, .card li { color: var(--ink); }
+  .muted { color: var(--ink-dim); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  code, pre {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    background: var(--code); color: #d8e2ff;
+    border-radius: 6px;
+  }
+  code { padding: 1px 6px; font-size: 13px; }
+  pre { padding: 12px 14px; overflow: auto; border: 1px solid var(--stroke); font-size: 12.5px; line-height: 1.5; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--stroke); vertical-align: top; }
+  th { color: var(--accent-2); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+
+  .pill {
+    display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px;
+    background: var(--panel-2); border: 1px solid var(--stroke); color: var(--ink-dim);
+    margin-right: 6px;
+  }
+  .pill.ok { color: var(--ok); border-color: rgba(126,232,162,.4); }
+  .pill.warn { color: var(--warn); border-color: rgba(255,184,107,.4); }
+  .pill.bad { color: var(--bad); border-color: rgba(255,122,144,.4); }
+
+  button.btn {
+    background: var(--accent); color: #0b0d19; border: 0; padding: 9px 14px;
+    border-radius: 8px; font: 600 13px/1 system-ui; cursor: pointer;
+  }
+  button.btn:hover { filter: brightness(1.05); }
+  button.btn.alt { background: var(--panel-2); color: var(--ink); border: 1px solid var(--stroke); }
+  input[type=text], input[type=number] {
+    background: var(--code); color: var(--ink); border: 1px solid var(--stroke);
+    padding: 8px 10px; border-radius: 6px; font: inherit; width: 100%;
+  }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 12px; color: var(--ink-dim); margin-bottom: 4px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row > * { flex: 1; }
+
+  .out {
+    background: var(--code); border: 1px solid var(--stroke); border-radius: 8px;
+    padding: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+    max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    color: #cddaff;
+  }
+  .status {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-dim);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); }
+  .dot.ok { background: var(--ok); }
+  .dot.warn { background: var(--warn); }
+
+  /* SVG flow */
+  svg.flow { width: 100%; height: auto; display: block; }
+  svg.flow .node { fill: var(--panel-2); stroke: var(--stroke); stroke-width: 1.5; }
+  svg.flow .node.active { stroke: var(--accent); stroke-width: 2.5; fill: rgba(110,231,255,.12); }
+  svg.flow .label { fill: var(--ink); font: 600 12px system-ui; }
+  svg.flow .sublabel { fill: var(--ink-dim); font: 11px system-ui; }
+  svg.flow .arrow { stroke: var(--stroke); stroke-width: 2; fill: none; marker-end: url(#arrow); }
+  svg.flow .arrow.active { stroke: var(--accent); }
+  svg.flow .topic { fill: rgba(180,140,255,.14); stroke: var(--accent-2); stroke-dasharray: 4 4; }
+
+  .step-nav { display: flex; gap: 8px; margin-top: 10px; }
+  .step-desc {
+    background: var(--panel-2); border: 1px solid var(--stroke); border-radius: 8px;
+    padding: 12px 14px; margin-top: 12px; min-height: 62px;
+  }
+  .step-desc .num { color: var(--accent); font-weight: 700; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Kafka Streams POC — Flow Explainer</h1>
+  <div class="sub">
+    Interactive companion for
+    <a href="README.md" style="color:var(--accent)">README.md</a> /
+    <a href="ISSUE.md" style="color:var(--accent)">ISSUE.md</a> /
+    <a href="TECHNICAL.md" style="color:var(--accent)">TECHNICAL.md</a> /
+    <a href="CONSISTENCY.md" style="color:var(--accent)">CONSISTENCY.md</a>.
+    Open the app on <code>localhost:8080</code> to run the live demo tab.
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="overview" class="active">Overview</button>
+  <button data-tab="enrichment">POC 1 · Enrichment</button>
+  <button data-tab="windows">POC 2 · Windows</button>
+  <button data-tab="join">POC 3 · Order ⨝ Payment</button>
+  <button data-tab="safety">Safety net</button>
+  <button data-tab="scale">Scale &amp; consistency</button>
+  <button data-tab="live">Live demo</button>
+</nav>
+
+<main>
+
+<!-- OVERVIEW -->
+<section class="tab active" id="tab-overview">
+  <div class="card">
+    <h2>The whole pipeline in one picture</h2>
+    <p class="muted">
+      Three topologies share a single <code>StreamsBuilder</code> so the enriched-order stream can feed both the aggregation
+      and the join topologies without re-reading from Kafka. Every arrow is a Kafka topic; every rounded rectangle is a
+      processor node.
+    </p>
+    <svg class="flow" viewBox="0 0 1100 470" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#a4acd6"/>
+        </marker>
+      </defs>
+
+      <!-- Sources -->
+      <rect class="topic" x="20" y="30" width="150" height="50" rx="10"/>
+      <text class="label" x="95" y="55" text-anchor="middle">products.v1</text>
+      <text class="sublabel" x="95" y="70" text-anchor="middle">compacted</text>
+
+      <rect class="topic" x="20" y="100" width="150" height="50" rx="10"/>
+      <text class="label" x="95" y="125" text-anchor="middle">users.v1</text>
+      <text class="sublabel" x="95" y="140" text-anchor="middle">compacted</text>
+
+      <rect class="topic" x="20" y="200" width="150" height="50" rx="10"/>
+      <text class="label" x="95" y="225" text-anchor="middle">orders.v1</text>
+
+      <rect class="topic" x="20" y="330" width="150" height="50" rx="10"/>
+      <text class="label" x="95" y="355" text-anchor="middle">payments.v1</text>
+
+      <!-- Enrichment -->
+      <rect class="node" x="270" y="120" width="220" height="140" rx="14"/>
+      <text class="label" x="380" y="145" text-anchor="middle">OrderEnrichmentTopology</text>
+      <text class="sublabel" x="380" y="163" text-anchor="middle">stream ⨝ GlobalKTable × 2</text>
+      <text class="sublabel" x="380" y="180" text-anchor="middle">no co-partitioning cost</text>
+      <text class="sublabel" x="380" y="200" text-anchor="middle">leftJoin → UNKNOWN safe</text>
+      <text class="sublabel" x="380" y="225" text-anchor="middle" fill="#6ee7ff">emits KStream&lt;EnrichedOrder&gt;</text>
+
+      <!-- arrows into enrichment -->
+      <path class="arrow" d="M170 55 C 220 55 220 155 270 155"/>
+      <path class="arrow" d="M170 125 C 220 125 220 175 270 175"/>
+      <path class="arrow" d="M170 225 C 220 225 220 200 270 200"/>
+
+      <!-- enriched-orders topic -->
+      <rect class="topic" x="530" y="130" width="140" height="45" rx="10"/>
+      <text class="label" x="600" y="152" text-anchor="middle">enriched-orders.v1</text>
+      <text class="sublabel" x="600" y="167" text-anchor="middle">materialized</text>
+
+      <!-- Windowed -->
+      <rect class="node" x="720" y="30" width="360" height="180" rx="14"/>
+      <text class="label" x="900" y="55" text-anchor="middle">WindowedAggregationsTopology</text>
+      <text class="sublabel" x="900" y="72" text-anchor="middle">tumbling · hopping · session</text>
+      <rect class="topic" x="740" y="90" width="150" height="35" rx="8"/>
+      <text class="label" x="815" y="112" text-anchor="middle" font-size="11">category-revenue.v1</text>
+      <rect class="topic" x="900" y="90" width="160" height="35" rx="8"/>
+      <text class="label" x="980" y="112" text-anchor="middle" font-size="11">user-order-counts.v1</text>
+      <rect class="topic" x="820" y="145" width="160" height="35" rx="8"/>
+      <text class="label" x="900" y="167" text-anchor="middle" font-size="11">user-sessions.v1</text>
+
+      <!-- Enrichment → windowed -->
+      <path class="arrow" d="M490 175 C 600 175 610 120 720 120"/>
+
+      <!-- Join -->
+      <rect class="node" x="270" y="290" width="360" height="140" rx="14"/>
+      <text class="label" x="450" y="315" text-anchor="middle">OrderPaymentJoinTopology</text>
+      <text class="sublabel" x="450" y="333" text-anchor="middle">stream-stream sliding join</text>
+      <text class="sublabel" x="450" y="350" text-anchor="middle">re-key payments by orderId</text>
+      <text class="sublabel" x="450" y="367" text-anchor="middle">10-min window · 30s grace</text>
+
+      <rect class="topic" x="680" y="325" width="160" height="45" rx="10"/>
+      <text class="label" x="760" y="347" text-anchor="middle">completed-orders.v1</text>
+      <text class="sublabel" x="760" y="362" text-anchor="middle">latencyMs stamped</text>
+
+      <path class="arrow" d="M170 225 C 220 225 220 320 270 320"/>
+      <path class="arrow" d="M170 355 C 220 355 220 370 270 370"/>
+      <path class="arrow" d="M630 350 L 680 350"/>
+
+      <!-- DLQ -->
+      <rect class="topic" x="900" y="380" width="160" height="45" rx="10" style="stroke:#ff7a90"/>
+      <text class="label" x="980" y="402" text-anchor="middle" fill="#ff7a90">streams.dlq.v1</text>
+      <text class="sublabel" x="980" y="417" text-anchor="middle">poison-pill sink</text>
+
+      <path class="arrow" d="M380 260 C 700 260 800 380 900 400" stroke="#ff7a90"/>
+    </svg>
+    <p class="muted" style="margin-top:12px">
+      Purple dashed = topic. Solid rectangle = topology (processor node). Pink = the DLQ safety valve — any record that
+      fails deserialization on any input topic is diverted here with origin headers.
+    </p>
+  </div>
+
+  <div class="grid-3">
+    <div class="card">
+      <h3>What's hard</h3>
+      <ul>
+        <li>Stateful compute over an unbounded stream</li>
+        <li>Late &amp; out-of-order events</li>
+        <li>Reference-data joins without shuffles</li>
+        <li>State surviving restarts</li>
+        <li>One bad record can't stall a partition</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What we're protecting</h3>
+      <ul>
+        <li>Throughput on the order path</li>
+        <li>Correctness of derived aggregates</li>
+        <li>Bounded state / memory</li>
+        <li>Availability during rebalance</li>
+        <li>End-to-end latency signal integrity</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Key tech</h3>
+      <ul>
+        <li><code>GlobalKTable</code> for broadcast reference data</li>
+        <li><code>JoinWindows</code> + grace period</li>
+        <li><code>SessionWindows</code> + merger</li>
+        <li>DLQ deserialization handler</li>
+        <li>Interactive Queries (single-instance)</li>
+        <li><code>REPLACE_THREAD</code> uncaught handler</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ENRICHMENT -->
+<section class="tab" id="tab-enrichment">
+  <div class="card">
+    <h2>POC 1 — Stream-Table Enrichment</h2>
+    <p class="muted">
+      Decorate every <code>OrderEvent</code> with product + user metadata without shuffling the orders stream. Uses
+      <code>GlobalKTable</code> so every instance holds a broadcast copy of the tables locally.
+    </p>
+
+    <svg class="flow" viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+      <rect class="topic" id="e-orders" x="20" y="150" width="160" height="50" rx="10"/>
+      <text class="label" x="100" y="175" text-anchor="middle">orders.v1</text>
+      <text class="sublabel" x="100" y="190" text-anchor="middle">keyed by orderId</text>
+
+      <rect class="topic" x="20" y="30" width="160" height="50" rx="10"/>
+      <text class="label" x="100" y="55" text-anchor="middle">products.v1</text>
+      <text class="sublabel" x="100" y="70" text-anchor="middle">compact · GlobalKTable</text>
+
+      <rect class="topic" x="20" y="240" width="160" height="50" rx="10"/>
+      <text class="label" x="100" y="265" text-anchor="middle">users.v1</text>
+      <text class="sublabel" x="100" y="280" text-anchor="middle">compact · GlobalKTable</text>
+
+      <rect class="node" id="e-join-p" x="270" y="110" width="180" height="60" rx="12"/>
+      <text class="label" x="360" y="135" text-anchor="middle">leftJoin(products)</text>
+      <text class="sublabel" x="360" y="152" text-anchor="middle">key = order.productId</text>
+
+      <rect class="node" id="e-join-u" x="500" y="110" width="180" height="60" rx="12"/>
+      <text class="label" x="590" y="135" text-anchor="middle">leftJoin(users)</text>
+      <text class="sublabel" x="590" y="152" text-anchor="middle">key = partial.userId</text>
+
+      <rect class="topic" id="e-out" x="720" y="115" width="160" height="50" rx="10"/>
+      <text class="label" x="800" y="140" text-anchor="middle">enriched-orders.v1</text>
+      <text class="sublabel" x="800" y="155" text-anchor="middle">+ KStream to POC 2</text>
+
+      <path class="arrow" d="M180 175 C 220 175 220 140 270 140"/>
+      <path class="arrow" d="M100 80  C 100 100 260 100 320 110"/>
+      <path class="arrow" d="M450 140 L 500 140"/>
+      <path class="arrow" d="M100 240 C 100 220 540 200 590 170"/>
+      <path class="arrow" d="M680 140 L 720 140"/>
+    </svg>
+
+    <div class="step-desc" id="e-step">
+      <span class="num">▶</span><span id="e-step-text">Click <b>Next step</b> to walk the record through the topology.</span>
+    </div>
+    <div class="step-nav">
+      <button class="btn alt" onclick="stepEnrichment(-1)">◀ Prev</button>
+      <button class="btn" onclick="stepEnrichment(1)">Next step ▶</button>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Key tech, by responsibility</h3>
+      <table>
+        <tr><th>Job</th><th>Mechanism</th></tr>
+        <tr><td>No shuffle</td><td><code>GlobalKTable</code></td></tr>
+        <tr><td>Retention</td><td><code>cleanup.policy=compact</code></td></tr>
+        <tr><td>Missing row safety</td><td><code>leftJoin</code> + UNKNOWN default</td></tr>
+        <tr><td>Serve to API</td><td>local KV store + <code>StateStoreController</code></td></tr>
+        <tr><td>Deser safety</td><td><code>DlqDeserializationExceptionHandler</code></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Tech debt</h3>
+      <ul>
+        <li><span class="pill warn">memory</span> in-memory GlobalKTable store — swap for persistent RocksDB in prod</li>
+        <li><span class="pill warn">schema</span> JSON, no schema registry / no evolution guardrails</li>
+        <li><span class="pill">observability</span> no "reference miss" alert stream — an unknown productId silently becomes UNCATEGORIZED</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- WINDOWS -->
+<section class="tab" id="tab-windows">
+  <div class="card">
+    <h2>POC 2 — Windowed Aggregations</h2>
+    <p class="muted">
+      Three window semantics over the enriched-orders stream. Every one uses <b>event time</b> with a bounded <b>grace period</b>.
+    </p>
+    <svg class="flow" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+      <!-- Tumbling -->
+      <text class="label" x="20" y="35">Tumbling 1 min · non-overlapping</text>
+      <g>
+        <rect class="node" x="20" y="45" width="80" height="30" rx="6"/>
+        <rect class="node" x="105" y="45" width="80" height="30" rx="6"/>
+        <rect class="node" x="190" y="45" width="80" height="30" rx="6"/>
+        <rect class="node" x="275" y="45" width="80" height="30" rx="6"/>
+        <text class="sublabel" x="60" y="65" text-anchor="middle">w1</text>
+        <text class="sublabel" x="145" y="65" text-anchor="middle">w2</text>
+        <text class="sublabel" x="230" y="65" text-anchor="middle">w3</text>
+        <text class="sublabel" x="315" y="65" text-anchor="middle">w4</text>
+      </g>
+
+      <!-- Hopping -->
+      <text class="label" x="20" y="110">Hopping 5 min / advance 1 min · overlapping</text>
+      <g>
+        <rect class="node" x="20" y="120" width="130" height="30" rx="6"/>
+        <rect class="node" x="45" y="120" width="130" height="30" rx="6" opacity=".6"/>
+        <rect class="node" x="70" y="120" width="130" height="30" rx="6" opacity=".4"/>
+        <rect class="node" x="95" y="120" width="130" height="30" rx="6" opacity=".3"/>
+        <rect class="node" x="120" y="120" width="130" height="30" rx="6" opacity=".2"/>
+      </g>
+
+      <!-- Session -->
+      <text class="label" x="20" y="180">Session 30s gap · data-driven</text>
+      <g>
+        <line x1="20" x2="360" y1="200" y2="200" stroke="#2a2f4a" stroke-width="1"/>
+        <circle cx="60" cy="200" r="4" fill="#6ee7ff"/>
+        <circle cx="75" cy="200" r="4" fill="#6ee7ff"/>
+        <circle cx="90" cy="200" r="4" fill="#6ee7ff"/>
+        <rect x="50" y="210" width="55" height="24" rx="6" fill="rgba(110,231,255,.15)" stroke="#6ee7ff"/>
+        <text class="sublabel" x="77" y="227" text-anchor="middle">session 1</text>
+
+        <circle cx="200" cy="200" r="4" fill="#b48cff"/>
+        <circle cx="220" cy="200" r="4" fill="#b48cff"/>
+        <rect x="190" y="210" width="45" height="24" rx="6" fill="rgba(180,140,255,.15)" stroke="#b48cff"/>
+        <text class="sublabel" x="212" y="227" text-anchor="middle">session 2</text>
+
+        <circle cx="330" cy="200" r="4" fill="#7ee8a2"/>
+        <rect x="320" y="210" width="30" height="24" rx="6" fill="rgba(126,232,162,.15)" stroke="#7ee8a2"/>
+        <text class="sublabel" x="335" y="227" text-anchor="middle">s3</text>
+      </g>
+
+      <!-- Right column: emit -->
+      <rect class="topic" x="480" y="30"  width="160" height="40" rx="8"/>
+      <text class="label" x="560" y="55" text-anchor="middle">category-revenue.v1</text>
+      <rect class="topic" x="480" y="100" width="160" height="40" rx="8"/>
+      <text class="label" x="560" y="125" text-anchor="middle">user-order-counts.v1</text>
+      <rect class="topic" x="480" y="170" width="160" height="40" rx="8"/>
+      <text class="label" x="560" y="195" text-anchor="middle">user-sessions.v1</text>
+
+      <rect class="node" x="670" y="30" width="210" height="180" rx="12"/>
+      <text class="label" x="775" y="55" text-anchor="middle">state stores</text>
+      <text class="sublabel" x="775" y="72" text-anchor="middle">RocksDB, backed by changelog</text>
+      <text class="sublabel" x="775" y="95" text-anchor="middle">category-revenue-store</text>
+      <text class="sublabel" x="775" y="115" text-anchor="middle">user-order-count-store</text>
+      <text class="sublabel" x="775" y="135" text-anchor="middle">user-session-store</text>
+      <text class="sublabel" x="775" y="170" text-anchor="middle" fill="#6ee7ff">served via /api/state/*</text>
+
+      <path class="arrow" d="M370 60  L 480 50"/>
+      <path class="arrow" d="M370 135 L 480 120"/>
+      <path class="arrow" d="M370 200 L 480 190"/>
+    </svg>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Grace periods — why they matter</h3>
+      <p>
+        A tumbling window "closes" at wall-clock, but our clock is <b>event time</b>. Grace period
+        <code>GRACE_PERIOD = 10s</code> (see
+        <code>WindowedAggregationsTopology.java:41</code>) says: after the window's end timestamp, keep accepting late
+        records for <b>10 more seconds</b> before locking the aggregate.
+      </p>
+      <p class="muted">
+        Too small → correct records get dropped. Too large → state store grows and downstream sees updates way after the fact.
+        <code>10s</code> is a decent default when producers stamp reasonable timestamps and clocks are within a few seconds.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Session merger — the subtle bit</h3>
+      <p>
+        When a late event lands in the gap between two existing sessions, Kafka Streams <b>merges</b> them into one. We
+        supply that merger explicitly:
+      </p>
+<pre>(key, left, right) -&gt; new UserOrderStats(
+    key,
+    left.orderCount() + right.orderCount(),
+    left.totalSpent().add(right.totalSpent()),
+    0L, 0L
+)</pre>
+      <p class="muted">
+        The merger runs during aggregation, not at emit — so downstream sees the merged session as if it always was one.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- JOIN -->
+<section class="tab" id="tab-join">
+  <div class="card">
+    <h2>POC 3 — Order ⨝ Payment</h2>
+    <p class="muted">
+      Symmetric sliding-window join. Orders and payments are re-keyed by <code>orderId</code>; a matched pair emits a
+      <code>CompletedOrder</code> with <code>latencyMs</code>.
+    </p>
+    <svg class="flow" viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+      <rect class="topic" x="20" y="30" width="160" height="45" rx="10"/>
+      <text class="label" x="100" y="52" text-anchor="middle">orders.v1</text>
+      <text class="sublabel" x="100" y="67" text-anchor="middle">key = orderId</text>
+
+      <rect class="topic" x="20" y="180" width="160" height="45" rx="10"/>
+      <text class="label" x="100" y="202" text-anchor="middle">payments.v1</text>
+      <text class="sublabel" x="100" y="217" text-anchor="middle">key = paymentId</text>
+
+      <rect class="node" x="240" y="170" width="180" height="70" rx="12"/>
+      <text class="label" x="330" y="195" text-anchor="middle">selectKey → orderId</text>
+      <text class="sublabel" x="330" y="212" text-anchor="middle">repartition topic</text>
+      <text class="sublabel" x="330" y="228" text-anchor="middle">co-partition with orders</text>
+
+      <rect class="node" x="470" y="80" width="220" height="120" rx="14"/>
+      <text class="label" x="580" y="110" text-anchor="middle">JoinWindows</text>
+      <text class="sublabel" x="580" y="128" text-anchor="middle">time diff = 10 min</text>
+      <text class="sublabel" x="580" y="145" text-anchor="middle">grace = 30 s</text>
+      <text class="sublabel" x="580" y="170" text-anchor="middle" fill="#6ee7ff">CompletedOrder + latencyMs</text>
+
+      <rect class="topic" x="720" y="115" width="170" height="50" rx="10"/>
+      <text class="label" x="805" y="137" text-anchor="middle">completed-orders.v1</text>
+
+      <path class="arrow" d="M180 52 C 240 52 400 100 470 120"/>
+      <path class="arrow" d="M180 202 C 220 202 220 205 240 205"/>
+      <path class="arrow" d="M420 205 C 440 205 440 160 470 160"/>
+      <path class="arrow" d="M690 140 L 720 140"/>
+    </svg>
+
+    <div class="grid-2" style="margin-top:16px">
+      <div>
+        <h3>What the window does</h3>
+        <table>
+          <tr><th>Case</th><th>Result</th></tr>
+          <tr><td>Payment 0.5s after order</td><td><span class="pill ok">match</span></td></tr>
+          <tr><td>Payment 9 min after order</td><td><span class="pill ok">match</span> (within 10-min window)</td></tr>
+          <tr><td>Payment 11 min after order</td><td><span class="pill bad">dropped</span> (past window)</td></tr>
+          <tr><td>Payment before order</td><td><span class="pill ok">match</span> (symmetric window)</td></tr>
+          <tr><td>Duplicate payment</td><td><span class="pill warn">dup output</span></td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Tech debt</h3>
+        <ul>
+          <li><span class="pill warn">semantics</span> inner-join — unpaid orders never surface in <code>completed-orders.v1</code></li>
+          <li><span class="pill warn">idempotency</span> no dedup on payment side; downstream is on the hook</li>
+          <li><span class="pill">cost</span> selectKey creates a repartition topic — at 10k/s that's real broker traffic</li>
+          <li><span class="pill">clocks</span> trusts producer timestamps; a broken clock breaks the join</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAFETY -->
+<section class="tab" id="tab-safety">
+  <div class="card">
+    <h2>Safety net — what keeps the app alive</h2>
+    <p class="muted">These aren't POCs. They're what makes the POCs safe to run overnight.</p>
+    <div class="grid-2">
+      <div>
+        <h3><span class="pill bad">poison pill</span> DLQ handler</h3>
+        <p>
+          <code>DlqDeserializationExceptionHandler</code> catches any deserialization failure, wraps the raw bytes with
+          origin headers (<code>dlq.origin.topic</code>, <code>partition</code>, <code>offset</code>,
+          <code>error.class</code>, <code>error.message</code>), publishes to <code>streams.dlq.v1</code>, and returns
+          <code>CONTINUE</code> so the stream thread doesn't die.
+        </p>
+        <p class="muted">If publishing to the DLQ itself fails, we return <code>FAIL</code> — silent loss is worse than a crash.</p>
+      </div>
+      <div>
+        <h3><span class="pill warn">produce error</span> Production handler</h3>
+        <p>
+          <code>LoggingProductionExceptionHandler</code> drops only <code>RecordTooLargeException</code> (a known-bad
+          single record). Everything else fails fast — we do not want to silently lose data because of a transient
+          broker problem.
+        </p>
+      </div>
+      <div>
+        <h3><span class="pill warn">thread crash</span> Uncaught handler</h3>
+        <p>
+          <code>REPLACE_THREAD</code>: a random NPE inside a processor spawns a fresh stream thread instead of leaving
+          the app to bleed threads until it's silently dead. Truly fatal exceptions (broker gone, auth revoked) still
+          propagate so the supervisor can restart.
+        </p>
+      </div>
+      <div>
+        <h3><span class="pill ok">observability</span> Actuator + Prometheus</h3>
+        <p>
+          <code>/actuator/health</code>, <code>/actuator/prometheus</code>, <code>/actuator/kafkastreams</code>. Kafka
+          Streams JMX metrics are exported as Prometheus timeseries via the Micrometer bridge — thread state, RocksDB
+          stats, and consumer lag are all available on the scrape endpoint.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCALE -->
+<section class="tab" id="tab-scale">
+  <div class="card">
+    <h2>Scale &amp; consistency</h2>
+    <p class="muted">Summary of <a href="CONSISTENCY.md" style="color:var(--accent)">CONSISTENCY.md</a>. Read the full doc before touching prod.</p>
+
+    <h3>The unit of scale is the partition, not the pod</h3>
+    <p>
+      Max useful parallelism = partition count. Adding a 4th pod to a 3-partition topic gives you an idle pod. Raise
+      partitions <b>before</b> raising replicas.
+    </p>
+
+    <h3>What happens when you scale 1 → 2 pods</h3>
+    <ol>
+      <li>Second pod joins the consumer group.</li>
+      <li>Broker rebalances. Some partitions move to the new pod.</li>
+      <li>Reassigned partitions <b>rebuild state stores</b> from the changelog topic on the new pod.</li>
+      <li>During rebuild, IQ calls for those keys return <code>InvalidStateStoreException</code>.</li>
+      <li>After rebuild, keys owned by pod B return 404 on pod A because we don't route.</li>
+    </ol>
+
+    <h3>Consistency by processing.guarantee</h3>
+    <table>
+      <tr><th>Mode</th><th>Guarantee</th><th>Cost</th><th>When</th></tr>
+      <tr>
+        <td><code>at_least_once</code> <span class="pill">default</span></td>
+        <td>Every record processed ≥1 time; duplicates possible under failure</td>
+        <td>Cheap</td>
+        <td>Downstream consumers are idempotent (search indexes, aggregate stores)</td>
+      </tr>
+      <tr>
+        <td><code>exactly_once_v2</code></td>
+        <td>Atomic write-output + commit-input via transactions</td>
+        <td>Higher latency, more broker load, tx state RF ≥ 3</td>
+        <td>Downstream is not idempotent (ledgers, wallets)</td>
+      </tr>
+    </table>
+
+    <h3>Interactive queries under N &gt; 1</h3>
+    <p>
+      Today <code>/api/state/*</code> only works when it hits the pod that owns the key's partition. Fix path:
+    </p>
+    <ol>
+      <li>Set <code>StreamsConfig.APPLICATION_SERVER_CONFIG</code> per pod (<code>POD_IP:8080</code>).</li>
+      <li>Look up the owning host with <code>KafkaStreams.queryMetadataForKey</code>.</li>
+      <li>Forward via <code>WebClient</code> with a loop-guard header.</li>
+      <li>For windowed / range queries, fan out to all instances and stitch.</li>
+    </ol>
+
+    <h3>Pre-flight checklist for N &gt; 1</h3>
+    <ul>
+      <li>Raise input-topic partition count</li>
+      <li>Set <code>application.server</code>, implement IQ routing</li>
+      <li>Set <code>group.instance.id</code> (static membership)</li>
+      <li>StatefulSet + PVC for <code>state.dir</code></li>
+      <li>Set <code>num.standby.replicas ≥ 1</code></li>
+      <li>Add <code>preStop</code> streams-close hook + adequate <code>terminationGracePeriodSeconds</code></li>
+      <li>Pick EOS vs at-least-once <b>based on downstream idempotency</b>, not vibes</li>
+    </ul>
+  </div>
+</section>
+
+<!-- LIVE -->
+<section class="tab" id="tab-live">
+  <div class="card">
+    <h2>Live demo — talk to <code>localhost:8080</code></h2>
+    <p class="muted">
+      Start the Spring app (<code>mvn spring-boot:run</code>) then use the buttons below. If you opened this file with
+      <code>file://</code>, CORS may block requests — either open via a small local server, or start the app first and
+      hit endpoints directly.
+    </p>
+    <div class="row" style="margin-bottom:10px">
+      <div class="field">
+        <label>Base URL</label>
+        <input type="text" id="baseUrl" value="http://localhost:8080">
+      </div>
+      <div>
+        <button class="btn" onclick="checkHealth()">Check health</button>
+        <span class="status" style="margin-left:10px"><span class="dot" id="healthDot"></span><span id="healthText">not checked</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h3>Quick order (order + matching payment)</h3>
+      <p class="muted">Posts to <code>POST /api/demo/quick-order</code>. Then poll IQ endpoints to watch aggregates catch up.</p>
+      <button class="btn" onclick="quickOrder()">Fire quick-order</button>
+      <button class="btn alt" onclick="quickOrder(10)">×10</button>
+      <div class="out" id="quickOut" style="margin-top:12px">—</div>
+    </div>
+
+    <div class="card">
+      <h3>Custom order</h3>
+      <div class="row">
+        <div class="field">
+          <label>User</label>
+          <input type="text" id="userId" value="U-1001">
+        </div>
+        <div class="field">
+          <label>Product</label>
+          <input type="text" id="productId" value="P-001">
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Quantity</label>
+          <input type="number" id="qty" value="2">
+        </div>
+        <div class="field">
+          <label>Unit price</label>
+          <input type="number" id="price" value="150000">
+        </div>
+      </div>
+      <button class="btn" onclick="publishOrder()">Publish order</button>
+      <div class="out" id="orderOut" style="margin-top:12px">—</div>
+    </div>
+
+    <div class="card">
+      <h3>Interactive queries</h3>
+      <div class="row">
+        <button class="btn alt" onclick="iq('/api/state/products/P-001', 'iqOut')">GET products/P-001</button>
+        <button class="btn alt" onclick="iq('/api/state/users/U-1001', 'iqOut')">GET users/U-1001</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn alt" onclick="iq('/api/state/category-revenue?windowMinutes=10', 'iqOut')">GET category-revenue</button>
+        <button class="btn alt" onclick="iq('/api/state/user-stats/U-1001?windowMinutes=30', 'iqOut')">GET user-stats/U-1001</button>
+      </div>
+      <div class="out" id="iqOut" style="margin-top:12px">—</div>
+    </div>
+
+    <div class="card">
+      <h3>Actuator</h3>
+      <div class="row">
+        <button class="btn alt" onclick="iq('/actuator/health', 'actOut')">health</button>
+        <button class="btn alt" onclick="iq('/actuator/kafkastreams', 'actOut')">kafkastreams</button>
+      </div>
+      <div class="out" id="actOut" style="margin-top:12px">—</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+  // Tabs
+  const tabs = document.getElementById('tabs');
+  tabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('section.tab').forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+
+  // Enrichment step-through
+  const eSteps = [
+    { id: 'e-orders', text: '1. Order O-42 lands on orders.v1, partitioned by orderId. The topology reads it via KStream(orders).' },
+    { id: 'e-join-p', text: '2. leftJoin(productsTable) — the join key is order.productId. Because products is a GlobalKTable, this is a local lookup with no re-partition.' },
+    { id: 'e-join-u', text: '3. leftJoin(usersTable) — the second lookup runs on the partial EnrichedOrder, keyed by userId. Also local, also no shuffle.' },
+    { id: 'e-out',    text: '4. The fully enriched value is emitted to enriched-orders.v1 AND returned as a KStream so POC 2 (aggregations) can consume it without re-reading Kafka.' },
+  ];
+  let eIdx = -1;
+  function stepEnrichment(delta) {
+    eIdx = Math.max(-1, Math.min(eSteps.length - 1, eIdx + delta));
+    document.querySelectorAll('#tab-enrichment svg .node, #tab-enrichment svg .topic').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('#tab-enrichment svg .arrow').forEach(a => a.classList.remove('active'));
+    const step = eIdx >= 0 ? eSteps[eIdx] : null;
+    document.getElementById('e-step-text').innerHTML = step
+      ? step.text
+      : 'Click <b>Next step</b> to walk the record through the topology.';
+    if (step) {
+      const el = document.getElementById(step.id);
+      if (el) el.classList.add('active');
+    }
+  }
+
+  // Live demo
+  function base() { return document.getElementById('baseUrl').value.replace(/\/$/, ''); }
+  async function checkHealth() {
+    const dot = document.getElementById('healthDot');
+    const text = document.getElementById('healthText');
+    try {
+      const r = await fetch(base() + '/actuator/health');
+      const j = await r.json();
+      dot.className = 'dot ' + (j.status === 'UP' ? 'ok' : 'warn');
+      text.textContent = j.status || 'unknown';
+    } catch (e) {
+      dot.className = 'dot';
+      text.textContent = 'unreachable — start the Spring app';
+    }
+  }
+  async function quickOrder(times) {
+    times = times || 1;
+    const out = document.getElementById('quickOut');
+    out.textContent = 'sending ' + times + '…';
+    const results = [];
+    for (let i = 0; i < times; i++) {
+      try {
+        const r = await fetch(base() + '/api/demo/quick-order', { method: 'POST' });
+        results.push(await r.json());
+      } catch (e) { results.push({ error: e.message }); }
+    }
+    out.textContent = JSON.stringify(results, null, 2);
+  }
+  async function publishOrder() {
+    const body = {
+      userId: document.getElementById('userId').value,
+      productId: document.getElementById('productId').value,
+      quantity: parseInt(document.getElementById('qty').value, 10),
+      unitPrice: parseFloat(document.getElementById('price').value),
+    };
+    const out = document.getElementById('orderOut');
+    try {
+      const r = await fetch(base() + '/api/demo/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      out.textContent = JSON.stringify(await r.json(), null, 2);
+    } catch (e) { out.textContent = 'error: ' + e.message; }
+  }
+  async function iq(path, outId) {
+    const out = document.getElementById(outId);
+    out.textContent = 'GET ' + path + '…';
+    try {
+      const r = await fetch(base() + path);
+      const text = await r.text();
+      try { out.textContent = JSON.stringify(JSON.parse(text), null, 2); }
+      catch { out.textContent = r.status + ' ' + r.statusText + '\n' + text; }
+    } catch (e) { out.textContent = 'error: ' + e.message; }
+  }
+</script>
+
+</body>
+</html>

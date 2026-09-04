@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: kafka-streams-poc
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    admin:
+      properties:
+        request.timeout.ms: 30000
+
+server:
+  port: 8080
+  shutdown: graceful
+
+app:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9093}
+    application-id: kafka-streams-poc
+    state-dir: ${KAFKA_STATE_DIR:./data/kafka-streams}
+    # Production-grade Streams config
+    num-stream-threads: 2
+    replication-factor: 1
+    commit-interval-ms: 1000
+    cache-max-bytes-buffering: 10485760
+    processing-guarantee: at_least_once
+    auto-offset-reset: earliest
+    # Recovery & resilience
+    max-poll-records: 500
+    request-timeout-ms: 60000
+    retry-backoff-ms: 1000
+  topics:
+    orders: orders.v1
+    payments: payments.v1
+    products: products.v1
+    users: users.v1
+    enriched-orders: enriched-orders.v1
+    completed-orders: completed-orders.v1
+    category-revenue: category-revenue.v1
+    user-order-counts: user-order-counts.v1
+    user-sessions: user-sessions.v1
+    dlq: streams.dlq.v1
+    partitions: 3
+  demo:
+    auto-generate: ${DEMO_AUTO_GENERATE:true}
+    interval-ms: 1500
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  health:
+    kafka:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.vndirect.kstreams: DEBUG
+    org.apache.kafka.streams: INFO
+    org.apache.kafka.clients: WARN
+    org.apache.kafka.streams.processor.internals.StreamThread: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{40} - %msg%n"

@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 0,
+    "refresh_interval": "1s"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "properties": {
+      "id":          { "type": "keyword" },
+      "sku":         { "type": "keyword" },
+      "name":        { "type": "text",     "fields": { "keyword": { "type": "keyword" } } },
+      "description": { "type": "text" },
+      "priceCents":  { "type": "long" },
+      "stock":       { "type": "integer" },
+      "version":     { "type": "long" },
+      "updatedAt":   { "type": "date" },
+      "createdAt":   { "type": "date" }
+    }
+  }
+}

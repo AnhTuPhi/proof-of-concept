@@ -1,0 +1,1 @@
+# Empty — kept for future autoconfigure additions. Each POC explicitly @Import's what it needs.

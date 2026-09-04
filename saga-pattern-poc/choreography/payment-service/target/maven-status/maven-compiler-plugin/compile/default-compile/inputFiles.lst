@@ -1,0 +1,9 @@
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\config\KafkaConfig.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\domain\Payment.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\domain\ProcessedEvent.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\messaging\SagaEventListener.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\messaging\SagaEventPublisher.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\PaymentServiceApplication.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\repository\PaymentRepository.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\repository\ProcessedEventRepository.java
+D:\Claude\saga-pattern-poc\choreography\payment-service\src\main\java\com\example\saga\choreography\payment\service\PaymentService.java

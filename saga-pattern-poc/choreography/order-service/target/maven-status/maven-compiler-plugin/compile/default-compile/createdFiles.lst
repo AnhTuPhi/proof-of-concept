@@ -1,0 +1,14 @@
+com\example\saga\choreography\order\OrderServiceApplication.class
+com\example\saga\choreography\order\api\GlobalExceptionHandler.class
+com\example\saga\choreography\order\domain\Order.class
+com\example\saga\choreography\order\messaging\SagaEventPublisher.class
+com\example\saga\choreography\order\domain\ProcessedEvent.class
+com\example\saga\choreography\order\service\OrderSagaCoordinator.class
+com\example\saga\choreography\order\api\OrderController.class
+com\example\saga\choreography\order\domain\ProcessedEvent$ProcessedEventBuilder.class
+com\example\saga\choreography\order\service\OrderService.class
+com\example\saga\choreography\order\repository\OrderRepository.class
+com\example\saga\choreography\order\domain\Order$OrderBuilder.class
+com\example\saga\choreography\order\messaging\SagaEventListener.class
+com\example\saga\choreography\order\repository\ProcessedEventRepository.class
+com\example\saga\choreography\order\config\KafkaConfig.class

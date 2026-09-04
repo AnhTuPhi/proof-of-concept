@@ -1,0 +1,21 @@
+server:
+  port: 8103
+  shutdown: graceful
+
+spring:
+  application:
+    name: es-zero-downtime-reindex-poc
+
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  reindex:
+    alias: products
+    v1-index: products_v1
+    v2-index: products_v2
+    initial-count: 50000
+
+logging:
+  level:
+    root: INFO
+    com.example.espoc: DEBUG

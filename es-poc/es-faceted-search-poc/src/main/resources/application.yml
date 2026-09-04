@@ -1,0 +1,11 @@
+server:
+  port: 8108
+spring:
+  application:
+    name: es-faceted-search-poc
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  facets:
+    index-name: fct_products
+    sample-size: 10000

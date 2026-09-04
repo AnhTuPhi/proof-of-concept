@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Saga Pattern Explorer — Choreography vs. Orchestration</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #30363d;
+    --txt: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --fwd: #3fb950; --comp: #f0883e; --fail: #f85149; --term: #58a6ff; --req: #a371f7;
+    --idle: #21262d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--txt);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  header { padding: 28px 24px 8px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  header p { color: var(--muted); margin: 4px 0; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 12px 24px 60px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 8px; }
+  .seg { display: inline-flex; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .seg button { background: transparent; border: none; color: var(--muted); padding: 9px 16px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  .seg button.active { background: var(--accent); color: #0d1117; }
+  .seg.scn button.active { background: var(--fwd); }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
+  .stage { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 10px; margin-top: 12px; }
+  svg { width: 100%; height: auto; display: block; }
+  .node rect { transition: fill .25s, stroke .25s; }
+  .playbar { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .playbar button { background: var(--panel2); border: 1px solid var(--border); color: var(--txt); padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  .playbar button:hover { border-color: var(--accent); }
+  .playbar button:disabled { opacity: .4; cursor: default; }
+  .stepcount { color: var(--muted); font-size: 13px; margin-left: auto; }
+  .cols { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
+  .log li { padding: 8px 10px; border-left: 3px solid var(--border); margin-bottom: 6px; background: var(--panel2); border-radius: 0 6px 6px 0; font-size: 13.5px; }
+  .log li .ev { font-weight: 700; }
+  .log li.k-fwd { border-color: var(--fwd); }
+  .log li.k-comp { border-color: var(--comp); }
+  .log li.k-fail { border-color: var(--fail); }
+  .log li.k-term { border-color: var(--term); }
+  .log li.k-req { border-color: var(--req); }
+  .log li .note { color: var(--muted); display: block; font-size: 12.5px; margin-top: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: var(--muted); font-weight: 600; }
+  code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  a { color: var(--accent); }
+  .tech-list { margin: 0; padding-left: 18px; font-size: 13.5px; }
+  .tech-list li { margin-bottom: 6px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 20px; color: #0d1117; }
+  .footlinks { margin-top: 22px; color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Saga Pattern Explorer</h1>
+  <p>The same distributed transaction — <em>place an order across payment, inventory &amp; shipping</em> — solved two ways. Step through each scenario to watch the forward path and the compensation (undo) path.</p>
+  <p style="font-size:13px">Companion docs: <a href="../ISSUE.md">ISSUE.md</a> · <a href="../TECHNICAL.md">TECHNICAL.md</a> · <a href="../CONSISTENCY.md">CONSISTENCY.md</a></p>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <span class="label">Flavor</span>
+    <div class="seg" id="flavorSeg">
+      <button data-flavor="choreography" class="active">Choreography (Kafka)</button>
+      <button data-flavor="orchestration">Orchestration (Temporal)</button>
+    </div>
+    <span class="label" style="margin-left:8px">Scenario</span>
+    <div class="seg scn" id="scnSeg">
+      <button data-scn="happy" class="active">Happy path</button>
+      <button data-scn="paymentFail">Payment fails</button>
+      <button data-scn="inventoryFail">Inventory fails</button>
+      <button data-scn="shippingFail">Shipping fails</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <svg id="diagram" viewBox="0 0 980 300" role="img" aria-label="Saga flow diagram"></svg>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--req)"></span>request / start</span>
+    <span><span class="dot" style="background:var(--fwd)"></span>forward step</span>
+    <span><span class="dot" style="background:var(--comp)"></span>compensation (undo)</span>
+    <span><span class="dot" style="background:var(--fail)"></span>failure trigger</span>
+    <span><span class="dot" style="background:var(--term)"></span>terminal outcome</span>
+  </div>
+
+  <div class="playbar">
+    <button id="btnReset">⟲ Reset</button>
+    <button id="btnPrev">◀ Prev</button>
+    <button id="btnPlay">▶ Play</button>
+    <button id="btnNext">Next ▶</button>
+    <span class="stepcount" id="stepCount"></span>
+  </div>
+
+  <div class="cols">
+    <div class="card">
+      <h3 id="logTitle">Event timeline</h3>
+      <ul class="log" id="log"></ul>
+    </div>
+    <div class="card">
+      <h3 id="techTitle">Key tech carrying this flavor</h3>
+      <div id="techPanel"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>What we are protecting (the invariants)</h3>
+    <table>
+      <tr><th>Invariant</th><th>How this POC upholds it</th></tr>
+      <tr><td>No money without goods, no goods without money</td><td>Every successful step registers an undo; failure runs undos in reverse (refund → release → cancel).</td></tr>
+      <tr><td>Exactly-once <em>effect</em> under at-least-once <em>delivery</em></td><td>Choreography: <code>processed_events(event_id)</code>. Orchestration: idempotent activities keyed on <code>orderId</code>/<code>paymentId</code>.</td></tr>
+      <tr><td>No leaked stock</td><td>Pessimistic <code>SELECT … FOR UPDATE</code> + <code>@Version</code>; every reservation is shipped or released.</td></tr>
+      <tr><td>Forward progress after a crash</td><td>Choreography: Kafka redelivers uncommitted offsets. Orchestration: Temporal replays workflow history on another worker.</td></tr>
+    </table>
+    <p class="footlinks">⚠️ Known gap surfaced across both: the <strong>transactional-outbox</strong> dual-write hazard — see <a href="../TECHNICAL.md">TECHNICAL.md → Tech debt</a> and <a href="../CONSISTENCY.md">CONSISTENCY.md</a> for why it matters most once you autoscale.</p>
+  </div>
+</div>
+
+<script>
+// ---------- node layouts per flavor ----------
+const LAYOUTS = {
+  choreography: {
+    client:    { x: 20,  y: 110, w: 110, h: 70, label: "Client", sub: "REST caller" },
+    order:     { x: 165, y: 110, w: 150, h: 70, label: "order-svc", sub: ":8081 · initiator + terminal" },
+    payment:   { x: 375, y: 110, w: 145, h: 70, label: "payment-svc", sub: ":8082 · charge / refund" },
+    inventory: { x: 575, y: 110, w: 150, h: 70, label: "inventory-svc", sub: ":8083 · reserve / release" },
+    shipping:  { x: 785, y: 110, w: 150, h: 70, label: "shipping-svc", sub: ":8084 · ship / cancel" },
+  },
+  orchestration: {
+    client:    { x: 20,  y: 110, w: 110, h: 70, label: "Client", sub: "REST caller" },
+    wf:        { x: 165, y: 110, w: 170, h: 70, label: "Workflow", sub: "Temporal · durable brain" },
+    payment:   { x: 390, y: 110, w: 145, h: 70, label: "charge()", sub: "payment activity" },
+    inventory: { x: 585, y: 110, w: 150, h: 70, label: "reserve()", sub: "inventory activity" },
+    shipping:  { x: 790, y: 110, w: 150, h: 70, label: "schedule()", sub: "shipping activity" },
+  }
+};
+
+// ---------- scenario step data ----------
+// kind: req | fwd | comp | fail | term ; from/to = node ids
+const SCENARIOS = {
+  choreography: {
+    happy: [
+      { from:"client", to:"order", ev:"POST /orders", kind:"req", note:"order-svc saves Order(PENDING) and publishes OrderCreated to saga.events (keyed by sagaId).", set:{order:"PENDING"} },
+      { from:"order", to:"payment", ev:"OrderCreated", kind:"fwd", note:"payment charges the card. inventory & shipping also consume this event to save a local saga_context row.", set:{} },
+      { from:"payment", to:"inventory", ev:"PaymentCompleted", kind:"fwd", note:"order-svc marks PAID; inventory reserves stock under SELECT … FOR UPDATE.", set:{order:"PAID", payment:"CHARGED"} },
+      { from:"inventory", to:"shipping", ev:"InventoryReserved", kind:"fwd", note:"order-svc marks INVENTORY_RESERVED; shipping schedules the shipment.", set:{order:"RESERVED", inventory:"RESERVED"} },
+      { from:"shipping", to:"order", ev:"ShippingScheduled", kind:"term", note:"order-svc stamps COMPLETED. Saga finished — every step committed. ✅", set:{shipping:"SCHEDULED", order:"COMPLETED"} },
+    ],
+    paymentFail: [
+      { from:"client", to:"order", ev:"POST /orders", kind:"req", note:"customerId starts with 'deadbeat' → payment will decline.", set:{order:"PENDING"} },
+      { from:"order", to:"payment", ev:"OrderCreated", kind:"fwd", note:"payment-svc attempts the charge.", set:{} },
+      { from:"payment", to:"order", ev:"PaymentFailed", kind:"fail", note:"gateway declines. Nothing was reserved or shipped, so there is nothing to undo.", set:{payment:"FAILED"} },
+      { from:"order", to:"order", ev:"→ CANCELLED", kind:"term", note:"order-svc stamps CANCELLED. Consistent end state, zero side effects. ✅", set:{order:"CANCELLED"} },
+    ],
+    inventoryFail: [
+      { from:"client", to:"order", ev:"POST /orders", kind:"req", note:"productId starts with 'OUT_OF_STOCK' → reservation will fail.", set:{order:"PENDING"} },
+      { from:"order", to:"payment", ev:"OrderCreated", kind:"fwd", note:"forward path begins.", set:{} },
+      { from:"payment", to:"inventory", ev:"PaymentCompleted", kind:"fwd", note:"card charged; inventory attempts to reserve.", set:{order:"PAID", payment:"CHARGED"} },
+      { from:"inventory", to:"order", ev:"InventoryFailed", kind:"fail", note:"out of stock. order-svc → COMPENSATING. payment-svc ALSO consumes this event.", set:{inventory:"FAILED", order:"COMPENSATING"} },
+      { from:"payment", to:"order", ev:"PaymentRefunded", kind:"comp", note:"payment-svc reverses the charge. order-svc → CANCELLED. Money returned. ✅", set:{payment:"REFUNDED", order:"CANCELLED"} },
+    ],
+    shippingFail: [
+      { from:"client", to:"order", ev:"POST /orders", kind:"req", note:"shippingAddress contains 'INVALID' → scheduling will fail.", set:{order:"PENDING"} },
+      { from:"order", to:"payment", ev:"OrderCreated", kind:"fwd", note:"forward path begins.", set:{} },
+      { from:"payment", to:"inventory", ev:"PaymentCompleted", kind:"fwd", note:"card charged.", set:{order:"PAID", payment:"CHARGED"} },
+      { from:"inventory", to:"shipping", ev:"InventoryReserved", kind:"fwd", note:"stock reserved; shipping attempts to schedule.", set:{order:"RESERVED", inventory:"RESERVED"} },
+      { from:"shipping", to:"order", ev:"ShippingFailed", kind:"fail", note:"invalid address. order-svc → COMPENSATING. inventory & payment both consume this event.", set:{shipping:"FAILED", order:"COMPENSATING"} },
+      { from:"inventory", to:"order", ev:"InventoryReleased", kind:"comp", note:"inventory-svc returns the reserved units (FOR UPDATE).", set:{inventory:"RELEASED"} },
+      { from:"payment", to:"order", ev:"PaymentRefunded", kind:"comp", note:"payment-svc reverses the charge. order-svc → CANCELLED. Fully undone in reverse. ✅", set:{payment:"REFUNDED", order:"CANCELLED"} },
+    ],
+  },
+  orchestration: {
+    happy: [
+      { from:"client", to:"wf", ev:"POST /orders → start", kind:"req", note:"orchestrator persists Order and starts OrderSagaWorkflow on Temporal.", set:{wf:"RUNNING"} },
+      { from:"wf", to:"payment", ev:"charge()", kind:"fwd", note:"activity charges; workflow registers saga.addCompensation(refund).", set:{payment:"CHARGED"} },
+      { from:"wf", to:"inventory", ev:"reserve()", kind:"fwd", note:"activity reserves; registers addCompensation(release).", set:{inventory:"RESERVED"} },
+      { from:"wf", to:"shipping", ev:"schedule()", kind:"fwd", note:"activity schedules; registers addCompensation(cancel).", set:{shipping:"SCHEDULED"} },
+      { from:"wf", to:"client", ev:"COMPLETED", kind:"term", note:"workflow returns COMPLETED; orchestrator updates the local Order row. ✅", set:{wf:"COMPLETED"} },
+    ],
+    paymentFail: [
+      { from:"client", to:"wf", ev:"POST /orders → start", kind:"req", note:"customerId 'deadbeat*' → charge throws NonRetryablePaymentException.", set:{wf:"RUNNING"} },
+      { from:"wf", to:"payment", ev:"charge() ✗", kind:"fail", note:"non-retryable business failure → Temporal does NOT retry; ActivityFailure bubbles up.", set:{payment:"FAILED"} },
+      { from:"wf", to:"wf", ev:"saga.compensate()", kind:"comp", note:"no compensations were registered yet — nothing to undo.", set:{} },
+      { from:"wf", to:"client", ev:"COMPENSATED", kind:"term", note:"workflow returns COMPENSATED with the reason; order CANCELLED. ✅", set:{wf:"COMPENSATED"} },
+    ],
+    inventoryFail: [
+      { from:"client", to:"wf", ev:"POST /orders → start", kind:"req", note:"productId 'OUT_OF_STOCK*' → reserve throws NonRetryableInventoryException.", set:{wf:"RUNNING"} },
+      { from:"wf", to:"payment", ev:"charge() ✓", kind:"fwd", note:"charge succeeds; refund compensation registered.", set:{payment:"CHARGED"} },
+      { from:"wf", to:"inventory", ev:"reserve() ✗", kind:"fail", note:"out of stock → non-retryable → ActivityFailure caught by the workflow.", set:{inventory:"FAILED"} },
+      { from:"wf", to:"payment", ev:"refund() [compensate]", kind:"comp", note:"saga.compensate() runs registered undos in reverse — only refund exists.", set:{payment:"REFUNDED"} },
+      { from:"wf", to:"client", ev:"COMPENSATED", kind:"term", note:"workflow returns COMPENSATED; order CANCELLED, charge reversed. ✅", set:{wf:"COMPENSATED"} },
+    ],
+    shippingFail: [
+      { from:"client", to:"wf", ev:"POST /orders → start", kind:"req", note:"address 'INVALID' → schedule throws NonRetryableShippingException.", set:{wf:"RUNNING"} },
+      { from:"wf", to:"payment", ev:"charge() ✓", kind:"fwd", note:"refund compensation registered.", set:{payment:"CHARGED"} },
+      { from:"wf", to:"inventory", ev:"reserve() ✓", kind:"fwd", note:"release compensation registered.", set:{inventory:"RESERVED"} },
+      { from:"wf", to:"shipping", ev:"schedule() ✗", kind:"fail", note:"invalid address → non-retryable → ActivityFailure caught.", set:{shipping:"FAILED"} },
+      { from:"wf", to:"inventory", ev:"release() [compensate]", kind:"comp", note:"compensate() reverse order: release runs first (registered last).", set:{inventory:"RELEASED"} },
+      { from:"wf", to:"payment", ev:"refund() [compensate]", kind:"comp", note:"then refund. order CANCELLED, everything undone in reverse. ✅", set:{payment:"REFUNDED"} },
+    ],
+  }
+};
+
+const TECH = {
+  choreography: [
+    ["Kafka topic <code>saga.events</code>", "the event spine; no central coordinator"],
+    ["Partition key = <code>sagaId</code>", "in-order delivery per saga, parallel across sagas"],
+    ["<code>processed_events(event_id)</code>", "idempotency — duplicate delivery becomes a no-op"],
+    ["<code>DefaultErrorHandler</code> + DLT", "capped backoff retry, then <code>saga.events.DLT</code>"],
+    ["Manual <code>ack.acknowledge()</code>", "commit offset only after the DB write succeeds"],
+    ["<code>SELECT … FOR UPDATE</code> + <code>@Version</code>", "serialize concurrent sagas on the stock row"],
+    ["<code>saga_context</code> row", "handles the OrderCreated-arrives-late race"],
+  ],
+  orchestration: [
+    ["Temporal workflow history", "durable state lives off your pods; replay resumes after a crash"],
+    ["<code>io.temporal.workflow.Saga</code>", "addCompensation() collects undos; compensate() runs them in reverse"],
+    ["<code>RetryOptions</code> per activity", "auto-retry transient blips (×2 backoff, cap 30s, max 5)"],
+    ["<code>doNotRetry</code> + <code>NonRetryable*Exception</code>", "business failures fail fast instead of retrying"],
+    ["Idempotent activities", "keyed on <code>orderId</code>/<code>paymentId</code> — at-least-once dispatch stays safe"],
+    ["<code>SELECT … FOR UPDATE</code> + <code>@Version</code>", "same row lock, inside the reserve activity"],
+    ["Temporal UI", "one place to answer “where is order X?”"],
+  ]
+};
+
+const STATUS_COLORS = {
+  PENDING:"#8b949e", PAID:"#3fb950", RUNNING:"#58a6ff", CHARGED:"#3fb950", RESERVED:"#3fb950",
+  SCHEDULED:"#3fb950", COMPLETED:"#3fb950", COMPENSATING:"#f0883e", COMPENSATED:"#f0883e",
+  CANCELLED:"#f85149", FAILED:"#f85149", REFUNDED:"#f0883e", RELEASED:"#f0883e"
+};
+const KIND_COLOR = { req:"var(--req)", fwd:"var(--fwd)", comp:"var(--comp)", fail:"var(--fail)", term:"var(--term)" };
+
+let flavor = "choreography", scenario = "happy", step = -1, timer = null;
+
+const svg = document.getElementById("diagram");
+const NS = "http://www.w3.org/2000/svg";
+
+function el(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function nodeState() {
+  // accumulate status per node from steps up to current
+  const st = {};
+  const steps = SCENARIOS[flavor][scenario];
+  for (let i = 0; i <= step && i < steps.length; i++) {
+    const s = steps[i].set || {};
+    for (const k in s) st[k] = s[k];
+  }
+  return st;
+}
+
+function drawDiagram() {
+  svg.innerHTML = "";
+  const nodes = LAYOUTS[flavor];
+  const steps = SCENARIOS[flavor][scenario];
+  const cur = step >= 0 && step < steps.length ? steps[step] : null;
+  const st = nodeState();
+
+  // arrowhead defs
+  const defs = el("defs");
+  for (const k in KIND_COLOR) {
+    const m = el("marker", { id:"ah-"+k, markerWidth:9, markerHeight:9, refX:7, refY:3, orient:"auto", markerUnits:"strokeWidth" });
+    m.appendChild(el("path", { d:"M0,0 L7,3 L0,6 Z", fill: KIND_COLOR[k] }));
+    defs.appendChild(m);
+  }
+  svg.appendChild(defs);
+
+  // current-step arrow (drawn behind nodes)
+  if (cur) {
+    const a = nodes[cur.from], b = nodes[cur.to];
+    const color = KIND_COLOR[cur.kind];
+    if (cur.from === cur.to) {
+      // self-loop above the node
+      const cx = a.x + a.w/2, ty = a.y;
+      const p = el("path", { d:`M ${cx-30} ${ty} C ${cx-45} ${ty-55}, ${cx+45} ${ty-55}, ${cx+30} ${ty}`,
+        fill:"none", stroke:color, "stroke-width":2.5, "marker-end":`url(#ah-${cur.kind})` });
+      svg.appendChild(p);
+    } else {
+      const forward = b.x > a.x;
+      const x1 = forward ? a.x + a.w : a.x;
+      const x2 = forward ? b.x : b.x + b.w;
+      const y1 = a.y + a.h/2, y2 = b.y + b.h/2;
+      // curve: bow upward for fwd/req/term, downward for comp/fail
+      const up = (cur.kind === "comp" || cur.kind === "fail") ? 1 : -1;
+      const midx = (x1 + x2) / 2, midy = (y1 + y2)/2 + up * 48;
+      const p = el("path", { d:`M ${x1} ${y1} Q ${midx} ${midy} ${x2} ${y2}`,
+        fill:"none", stroke:color, "stroke-width":3, "marker-end":`url(#ah-${cur.kind})`,
+        "stroke-dasharray": cur.kind==="comp" ? "7 5" : "none" });
+      svg.appendChild(p);
+      // event label on the curve
+      const lbl = el("text", { x: midx, y: midy + (up<0? -6 : 16), fill: color, "font-size":13, "font-weight":700, "text-anchor":"middle" }, cur.ev);
+      lbl.setAttribute("paint-order","stroke"); lbl.setAttribute("stroke","#0d1117"); lbl.setAttribute("stroke-width","4");
+      svg.appendChild(lbl);
+    }
+  }
+
+  // nodes
+  for (const id in nodes) {
+    const n = nodes[id];
+    const active = cur && (cur.from === id || cur.to === id);
+    const status = st[id];
+    const g = el("g", { class:"node" });
+    const rect = el("rect", {
+      x:n.x, y:n.y, width:n.w, height:n.h, rx:12,
+      fill: active ? "#1f2d3d" : "var(--panel2)",
+      stroke: active ? (cur ? KIND_COLOR[cur.kind] : "var(--accent)") : "var(--border)",
+      "stroke-width": active ? 3 : 1.5
+    });
+    g.appendChild(rect);
+    g.appendChild(el("text", { x:n.x+n.w/2, y:n.y+26, fill:"var(--txt)", "font-size":15, "font-weight":700, "text-anchor":"middle" }, n.label));
+    g.appendChild(el("text", { x:n.x+n.w/2, y:n.y+44, fill:"var(--muted)", "font-size":10.5, "text-anchor":"middle" }, n.sub));
+    if (status) {
+      const c = STATUS_COLORS[status] || "#8b949e";
+      const badge = el("rect", { x:n.x+n.w/2-38, y:n.y+n.h-22, width:76, height:17, rx:9, fill:c });
+      g.appendChild(badge);
+      g.appendChild(el("text", { x:n.x+n.w/2, y:n.y+n.h-9, fill:"#0d1117", "font-size":10.5, "font-weight":800, "text-anchor":"middle" }, status));
+    }
+    svg.appendChild(g);
+  }
+
+  // bus line for choreography
+  if (flavor === "choreography") {
+    svg.appendChild(el("line", { x1:165, y1:250, x2:935, y2:250, stroke:"var(--border)", "stroke-width":2, "stroke-dasharray":"4 4" }));
+    svg.appendChild(el("text", { x:550, y:270, fill:"var(--muted)", "font-size":11.5, "text-anchor":"middle" }, "Kafka topic  saga.events  (partitioned by sagaId · broadcast to every service)"));
+  } else {
+    svg.appendChild(el("text", { x:550, y:262, fill:"var(--muted)", "font-size":11.5, "text-anchor":"middle" }, "Temporal server durably records every step — a worker crash is resumed by replay"));
+  }
+}
+
+function renderLog() {
+  const log = document.getElementById("log");
+  log.innerHTML = "";
+  const steps = SCENARIOS[flavor][scenario];
+  for (let i = 0; i <= step && i < steps.length; i++) {
+    const s = steps[i];
+    const li = document.createElement("li");
+    li.className = "k-" + s.kind;
+    li.innerHTML = `<span class="ev">${i+1}. ${s.ev}</span><span class="note">${s.note}</span>`;
+    log.appendChild(li);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderTech() {
+  document.getElementById("techPanel").innerHTML =
+    "<ul class='tech-list'>" + TECH[flavor].map(t => `<li><strong>${t[0]}</strong> — ${t[1]}</li>`).join("") + "</ul>";
+}
+
+function updateCount() {
+  const steps = SCENARIOS[flavor][scenario];
+  document.getElementById("stepCount").textContent =
+    step < 0 ? `0 / ${steps.length}` : `${step+1} / ${steps.length}`;
+  document.getElementById("btnPrev").disabled = step < 0;
+  document.getElementById("btnNext").disabled = step >= steps.length - 1;
+}
+
+function render() { drawDiagram(); renderLog(); renderTech(); updateCount(); }
+
+function next() {
+  const steps = SCENARIOS[flavor][scenario];
+  if (step < steps.length - 1) { step++; render(); }
+  else stopPlay();
+}
+function prev() { if (step >= 0) { step--; render(); } }
+function reset() { stopPlay(); step = -1; render(); }
+
+function stopPlay() { if (timer) { clearInterval(timer); timer = null; document.getElementById("btnPlay").textContent = "▶ Play"; } }
+function play() {
+  if (timer) { stopPlay(); return; }
+  const steps = SCENARIOS[flavor][scenario];
+  if (step >= steps.length - 1) step = -1;
+  document.getElementById("btnPlay").textContent = "❚❚ Pause";
+  timer = setInterval(() => {
+    const s = SCENARIOS[flavor][scenario];
+    if (step < s.length - 1) { step++; render(); } else stopPlay();
+  }, 1300);
+}
+
+// wiring
+document.getElementById("flavorSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#flavorSeg button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active"); flavor = b.dataset.flavor; reset();
+});
+document.getElementById("scnSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#scnSeg button").forEach(x => x.classList.remove("active"));
+  b.classList.add("active"); scenario = b.dataset.scn; reset();
+});
+document.getElementById("btnNext").onclick = () => { stopPlay(); next(); };
+document.getElementById("btnPrev").onclick = () => { stopPlay(); prev(); };
+document.getElementById("btnReset").onclick = reset;
+document.getElementById("btnPlay").onclick = play;
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight") { stopPlay(); next(); }
+  else if (e.key === "ArrowLeft") { stopPlay(); prev(); }
+  else if (e.key === " ") { e.preventDefault(); play(); }
+});
+
+render();
+</script>
+</body>
+</html>

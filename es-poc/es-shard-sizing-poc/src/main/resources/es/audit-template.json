@@ -1,0 +1,21 @@
+{
+  "index_patterns": ["audit-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "audit-policy",
+      "index.lifecycle.rollover_alias": "audit-write"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "timestamp": { "type": "date" },
+        "actor":     { "type": "keyword" },
+        "action":    { "type": "keyword" },
+        "resource":  { "type": "keyword" },
+        "outcome":   { "type": "keyword" }
+      }
+    }
+  }
+}

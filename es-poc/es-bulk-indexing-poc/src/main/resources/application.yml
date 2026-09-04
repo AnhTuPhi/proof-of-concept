@@ -1,0 +1,19 @@
+server:
+  port: 8104
+  shutdown: graceful
+
+spring:
+  application:
+    name: es-bulk-indexing-poc
+
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+    socket-timeout: 120s     # bulk requests are large — give them room
+  bulk:
+    index-name: bulk_products
+
+logging:
+  level:
+    root: INFO
+    com.example.espoc: INFO

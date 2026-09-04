@@ -1,0 +1,14 @@
+server:
+  port: 8109
+spring:
+  application:
+    name: es-hybrid-search-poc
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  hybrid:
+    index-name: hyb_products
+    embedding-dims: 384         # small dim for the stub; bump for real models
+    sample-size: 500
+  embeddings:
+    provider: stub              # stub | openai (impl your own EmbeddingClient bean to plug a real one)

@@ -1,0 +1,13 @@
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\config\KafkaConfig.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\domain\ProcessedEvent.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\domain\Reservation.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\domain\SagaContext.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\domain\Stock.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\InventoryServiceApplication.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\messaging\SagaEventListener.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\messaging\SagaEventPublisher.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\repository\ProcessedEventRepository.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\repository\ReservationRepository.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\repository\SagaContextRepository.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\repository\StockRepository.java
+D:\Claude\saga-pattern-poc\choreography\inventory-service\src\main\java\com\example\saga\choreography\inventory\service\InventoryService.java

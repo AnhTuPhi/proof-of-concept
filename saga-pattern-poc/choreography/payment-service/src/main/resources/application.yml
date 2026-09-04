@@ -1,0 +1,59 @@
+server:
+  port: 8082
+  shutdown: graceful
+
+spring:
+  application:
+    name: choreography-payment-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/saga
+    username: ${DB_USER:saga}
+    password: ${DB_PASSWORD:saga}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: payment_svc
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    schemas: payment_svc
+    default-schema: payment_svc
+    create-schemas: true
+    locations: classpath:db/migration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: choreography-payment-service
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.example.saga.common.events
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.example.saga.common.events.SagaEvent
+    listener:
+      ack-mode: manual
+      missing-topics-fatal: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+# Simulated payment behavior — drives positive and negative test scenarios.
+payment:
+  simulated-failure-customer-prefix: "deadbeat"
+  processing-delay-ms: 100

@@ -1,0 +1,11 @@
+server:
+  port: 8112
+spring:
+  application:
+    name: es-observability-poc
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  observability:
+    index-name: obs_products
+    sample-size: 50000

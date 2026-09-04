@@ -1,0 +1,11 @@
+server:
+  port: 8106
+spring:
+  application:
+    name: es-relevance-tuning-poc
+
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  relevance:
+    index-name: rel_products

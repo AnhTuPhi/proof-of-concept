@@ -1,0 +1,15 @@
+com\example\saga\choreography\shipping\messaging\SagaEventListener.class
+com\example\saga\choreography\shipping\ShippingServiceApplication.class
+com\example\saga\choreography\shipping\domain\SagaContext$SagaContextBuilder.class
+com\example\saga\choreography\shipping\domain\Shipment.class
+com\example\saga\choreography\shipping\domain\Shipment$Status.class
+com\example\saga\choreography\shipping\service\ShippingService.class
+com\example\saga\choreography\shipping\domain\SagaContext.class
+com\example\saga\choreography\shipping\config\KafkaConfig.class
+com\example\saga\choreography\shipping\domain\Shipment$ShipmentBuilder.class
+com\example\saga\choreography\shipping\repository\SagaContextRepository.class
+com\example\saga\choreography\shipping\messaging\SagaEventPublisher.class
+com\example\saga\choreography\shipping\repository\ShipmentRepository.class
+com\example\saga\choreography\shipping\domain\ProcessedEvent$ProcessedEventBuilder.class
+com\example\saga\choreography\shipping\repository\ProcessedEventRepository.class
+com\example\saga\choreography\shipping\domain\ProcessedEvent.class

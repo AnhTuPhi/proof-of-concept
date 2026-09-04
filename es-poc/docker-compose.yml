@@ -1,0 +1,128 @@
+# Shared infra for every POC in the suite.
+# - postgres: source-of-truth DB, schema-per-POC.
+# - elasticsearch: single-node, dev mode (no security), enough for everything.
+# - kibana: visualization + Dev Tools console.
+# - kafka (KRaft, no Zookeeper): used by db-to-es-sync-poc.
+# - kafka-ui: optional UI.
+# - redis: used by es-eventual-consistency-poc.
+# - debezium-connect: optional, used by db-to-es-sync-poc (Debezium-via-Connect path).
+#
+# Boot only what you need with profiles:
+#   docker compose up -d postgres elasticsearch kibana    # minimal
+#   docker compose --profile sync up -d                   # adds kafka + debezium
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: espoc-postgres
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: es_poc
+      POSTGRES_PASSWORD: es_poc
+      POSTGRES_DB: es_poc
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"            # required for Debezium / logical replication
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U es_poc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: espoc-elasticsearch
+    ports: ["9200:9200", "9300:9300"]
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - cluster.name=espoc-es
+      - node.name=espoc-es-node-1
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: espoc-kibana
+    ports: ["5601:5601"]
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ----- Kafka (KRaft mode, no Zookeeper) -----
+  kafka:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: espoc-kafka
+    profiles: ["sync", "full"]
+    ports: ["9092:9092", "9094:9094"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093,EXTERNAL://0.0.0.0:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 72
+      CLUSTER_ID: "espoc-kraft-cluster-id"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: espoc-kafka-ui
+    profiles: ["sync", "full"]
+    ports: ["8088:8080"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: espoc
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on: [kafka]
+
+  # Debezium Connect — only needed if you want the "Debezium via Kafka Connect" path
+  # (the embedded engine in db-to-es-sync-poc does not need this).
+  debezium-connect:
+    image: debezium/connect:2.7.3.Final
+    container_name: espoc-debezium
+    profiles: ["sync-full", "full"]
+    ports: ["8083:8083"]
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: espoc-connect
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+    depends_on: [kafka, postgres]
+
+  redis:
+    image: redis:7-alpine
+    container_name: espoc-redis
+    profiles: ["consistency", "full"]
+    ports: ["6379:6379"]
+
+volumes:
+  postgres-data:
+  es-data:

@@ -1,0 +1,8 @@
+server:
+  port: 8113
+spring:
+  application:
+    name: es-gotchas-poc
+app:
+  es:
+    uris: [ "http://localhost:9200" ]

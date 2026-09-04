@@ -1,0 +1,10 @@
+[
+  { "query": "iphone",        "expected": ["p1", "p2", "p3"] },
+  { "query": "samsung phone", "expected": ["p10", "p11"] },
+  { "query": "laptop",        "expected": ["p20", "p21", "p22"] },
+  { "query": "running shoes", "expected": ["p30", "p31"] },
+  { "query": "coffee maker",  "expected": ["p40"] },
+  { "query": "wireless mouse","expected": ["p50", "p51"] },
+  { "query": "kindle",        "expected": ["p60"] },
+  { "query": "noise cancelling headphones", "expected": ["p70", "p71"] }
+]

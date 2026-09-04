@@ -1,0 +1,18 @@
+target/
+*.class
+*.jar
+*.war
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
+logs/
+.mvn/wrapper/maven-wrapper.jar
+hs_err_pid*
+
+# Local env overrides
+application-local.yml
+application-local.properties
+.env
+.env.local

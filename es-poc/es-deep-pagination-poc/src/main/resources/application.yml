@@ -1,0 +1,27 @@
+server:
+  port: 8102
+  shutdown: graceful
+
+spring:
+  application:
+    name: es-deep-pagination-poc
+
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  pagination:
+    index-name: pag_products
+    initial-load-count: 1000000
+    bulk-chunk-size: 5000
+    auto-load: true   # load on startup if index empty
+
+logging:
+  level:
+    root: INFO
+    com.example.espoc: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info

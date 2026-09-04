@@ -1,0 +1,8 @@
+server:
+  port: 8111
+spring:
+  application:
+    name: es-shard-sizing-poc
+app:
+  es:
+    uris: [ "http://localhost:9200" ]

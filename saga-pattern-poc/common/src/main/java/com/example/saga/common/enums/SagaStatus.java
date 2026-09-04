@@ -1,0 +1,15 @@
+package com.example.saga.common.enums;
+
+public enum SagaStatus {
+    STARTED,
+    PAYMENT_PENDING,
+    PAYMENT_COMPLETED,
+    INVENTORY_PENDING,
+    INVENTORY_RESERVED,
+    SHIPPING_PENDING,
+    SHIPPING_SCHEDULED,
+    COMPLETED,
+    COMPENSATING,
+    COMPENSATED,
+    FAILED
+}

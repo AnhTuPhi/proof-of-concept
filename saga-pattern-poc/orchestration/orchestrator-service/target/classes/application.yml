@@ -1,0 +1,64 @@
+server:
+  port: 8090
+  shutdown: graceful
+
+spring:
+  application:
+    name: orchestration-orchestrator-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/saga
+    username: ${DB_USER:saga}
+    password: ${DB_PASSWORD:saga}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: orchestrator_svc
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    schemas: orchestrator_svc
+    default-schema: orchestrator_svc
+    create-schemas: true
+    locations: classpath:db/migration
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  temporal:
+    connection:
+      target: ${TEMPORAL_TARGET:localhost:7233}
+    namespace: ${TEMPORAL_NAMESPACE:default}
+    workers:
+      - name: order-saga-worker
+        task-queue: ORDER_SAGA_TASK_QUEUE
+        capacity:
+          max-concurrent-workflow-task-executors: 50
+          max-concurrent-activity-executors: 50
+    workers-auto-discovery:
+      packages:
+        - com.example.saga.orchestration.workflow
+        - com.example.saga.orchestration.activity
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+# Simulated activity behavior, mirrors the choreography knobs so tests look symmetric.
+saga:
+  payment:
+    failure-customer-prefix: "deadbeat"
+  inventory:
+    out-of-stock-product-prefix: "OUT_OF_STOCK"
+    default-on-hand: 100
+  shipping:
+    invalid-address-keyword: "INVALID"
+
+logging:
+  level:
+    com.example.saga: INFO
+    io.temporal: WARN

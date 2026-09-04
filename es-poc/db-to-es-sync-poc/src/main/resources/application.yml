@@ -1,0 +1,73 @@
+server:
+  port: 8101
+  shutdown: graceful
+
+spring:
+  application:
+    name: db-to-es-sync-poc
+  datasource:
+    url: jdbc:postgresql://localhost:5432/es_poc
+    username: es_poc
+    password: es_poc
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 2
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    schemas: sync_naive,sync_outbox,sync_cdc
+    default-schema: sync_naive
+    create-schemas: true
+    baseline-on-migrate: true
+  kafka:
+    bootstrap-servers: localhost:9094
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        retries: 2147483647
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: db-to-es-sync-outbox-consumer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: manual_immediate
+
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  sync:
+    outbox:
+      poll-interval-ms: 500
+      batch-size: 100
+      enabled: true
+    cdc:
+      enabled: true
+      offset-storage-file: ./build/debezium-offsets.dat
+      slot-name: espoc_sync_cdc_slot
+      publication-name: espoc_sync_cdc_pub
+
+logging:
+  level:
+    root: INFO
+    com.example.espoc: DEBUG
+    io.debezium: INFO
+    org.hibernate.SQL: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics

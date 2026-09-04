@@ -1,0 +1,13 @@
+server:
+  port: 8107
+spring:
+  application:
+    name: es-autocomplete-poc
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  autocomplete:
+    ngram-index: ac_ngram
+    completion-index: ac_completion
+    sayt-index: ac_sayt
+    sample-size: 10000

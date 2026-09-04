@@ -1,0 +1,20 @@
+server:
+  port: 8105
+spring:
+  application:
+    name: es-vietnamese-search-poc
+
+app:
+  es:
+    uris: [ "http://localhost:9200" ]
+  vietnamese:
+    standard-index: vn_products_standard
+    folded-index:   vn_products_folded
+    icu-index:      vn_products_icu
+    icu-enabled: false      # set true after `elasticsearch-plugin install analysis-icu`
+    sample-size: 5000
+
+logging:
+  level:
+    root: INFO
+    com.example.espoc: DEBUG
